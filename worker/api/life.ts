@@ -308,6 +308,7 @@ function stickerInput(b: Record<string, unknown>) {
   if (b.color !== undefined && COLORS.includes(String(b.color))) out.color = b.color;
   for (const k of ["x", "y", "rot"] as const) if (b[k] !== undefined) out[k] = num(b[k]) ?? 0;
   if (b.z !== undefined) out.z = int(b.z) ?? 1;
+  if (b.pinned !== undefined) out.pinned = b.pinned ? 1 : 0;
   return out;
 }
 
@@ -318,7 +319,7 @@ life.post("/stickers", async (c) => {
   const z = await first<{ z: number }>(c.env.DB, "SELECT COALESCE(MAX(z),0)+1 AS z FROM stickers");
   const row = await first<{ id: number }>(
     c.env.DB,
-    "INSERT INTO stickers(kind, ref_id, text, date, color, x, y, rot, z, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+    "INSERT INTO stickers(kind, ref_id, text, date, color, x, y, rot, z, pinned, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
     b.kind ?? "note",
     b.ref_id ?? null,
     b.text ?? null,
@@ -328,6 +329,7 @@ life.post("/stickers", async (c) => {
     b.y ?? 60,
     b.rot ?? Math.round((Math.random() * 6 - 3) * 10) / 10,
     z?.z ?? 1,
+    b.pinned ?? 0,
     Date.now(),
   );
   return c.json({ id: row!.id });

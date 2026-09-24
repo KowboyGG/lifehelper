@@ -254,7 +254,14 @@ test("бот: быстрые траты, задачи, вишлист, стик�
   assert.equal(w.data.items[0].cooldown_left, 7);
 
   await message("/note Не забыть про дедлайн");
-  assert.equal((await api("/api/stickers")).data[0].text, "Не забыть про дедлайн");
+  const note = (await api("/api/stickers")).data[0];
+  assert.equal(note.text, "Не забыть про дедлайн");
+  assert.equal(note.pinned, 0);
+  // закрепить на «Сегодня» (миграция 0002 применена самим воркером)
+  await api(`/api/stickers/${note.id}`, { method: "PUT", body: { pinned: true, color: "pink" } });
+  const pinned = (await api("/api/stickers")).data[0];
+  assert.equal(pinned.pinned, 1);
+  assert.equal(pinned.color, "pink");
 });
 
 test("расширение: токен, блокировка, учёт времени и отвлечений", async () => {

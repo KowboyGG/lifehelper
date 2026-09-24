@@ -91,8 +91,8 @@ ins("wishes", { id: 3, title: "Поездка во Львов", emoji: "🚆", p
 ins("wishes", { id: 4, title: "Кроссовки для бега", emoji: "👟", price: 3500, currency: "UAH", priority: 0, status: "bought", bought_at: now, created_at: now - 40 * 86400000 });
 
 ins("stickers", { kind: "goal", ref_id: 1, color: "yellow", x: 60, y: 60, rot: -2, z: 1, created_at: now });
-ins("stickers", { kind: "countdown", text: "НМТ по математике", date: "2027-05-20", color: "blue", x: 330, y: 90, rot: 2.5, z: 2, created_at: now });
-ins("stickers", { kind: "note", text: "Не жди мотивации.\nСядь на 10 минут — дальше пойдёт.", color: "pink", x: 600, y: 50, rot: -1.5, z: 3, created_at: now });
+ins("stickers", { kind: "countdown", text: "НМТ по математике", date: "2027-05-20", color: "blue", x: 330, y: 90, rot: 2.5, z: 2, pinned: 1, created_at: now });
+ins("stickers", { kind: "note", text: "Не жди мотивации.\nСядь на 10 минут — дальше пойдёт.", color: "pink", x: 600, y: 50, rot: -1.5, z: 3, pinned: 1, created_at: now });
 ins("stickers", { kind: "streak", color: "orange", x: 110, y: 330, rot: 1.5, z: 4, created_at: now });
 ins("stickers", { kind: "wish", ref_id: 1, color: "purple", x: 400, y: 360, rot: -3, z: 5, created_at: now });
 ins("stickers", { kind: "money", color: "green", x: 680, y: 330, rot: 2, z: 6, created_at: now });

@@ -1633,34 +1633,110 @@ textarea.input {
   background: rgba(0, 0, 0, 0.55);
   border-radius: inherit;
 }
+/* Панель стикера — внутри карточки, поэтому не пропадает, пока ведёшь к ней мышь */
 .sticker .s-tools {
   position: absolute;
+  top: 8px;
   right: 8px;
-  bottom: -40px;
   display: flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+  max-width: calc(100% - 16px);
+  padding: 3px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.45);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s;
-  background: var(--card);
-  padding: 5px;
-  border-radius: 99px;
-  border: 1px solid var(--line-2);
-  box-shadow: var(--shadow-pop);
-  z-index: 5;
+  z-index: 3;
 }
 .sticker:hover .s-tools,
+.sticker.open .s-tools,
 .sticker.editing .s-tools {
   opacity: 1;
   pointer-events: auto;
 }
-.sticker .s-tools .dotc {
-  width: 20px;
-  height: 20px;
+.sticker:hover,
+.sticker.open,
+.sticker.editing {
+  z-index: 900 !important;
+}
+.sticker .t-btn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #26221a;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+}
+.sticker .t-btn:hover,
+.sticker .t-btn.on {
+  background: rgba(0, 0, 0, 0.09);
+}
+.sticker .t-btn.danger:hover {
+  background: rgba(214, 81, 81, 0.18);
+  color: #b33a3a;
+}
+.sticker .s-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+  width: 100%;
+  padding: 4px 3px 3px;
+}
+.sticker .dotc {
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: 2px solid rgba(0, 0, 0, 0.15);
   cursor: pointer;
   padding: 0;
+}
+.sticker .dotc.on {
+  border-color: rgba(0, 0, 0, 0.6);
+}
+.sticker .s-pin {
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  font-size: 13px;
+  opacity: 0.6;
+}
+.sticker-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex: none;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+.sticker-dot.c-yellow { background: #fde58a; }
+.sticker-dot.c-pink { background: #f9b9cc; }
+.sticker-dot.c-green { background: #b7ebc9; }
+.sticker-dot.c-blue { background: #b9d6fb; }
+.sticker-dot.c-purple { background: #d7c6fb; }
+.sticker-dot.c-orange { background: #fcc79b; }
+.sticker-dot.c-white { background: #fbfaf6; }
+/* Стикеры на странице «Сегодня» — обычной сеткой */
+.sticker-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  padding: 12px 2px 4px;
+}
+.sticker.static {
+  position: relative;
+  left: auto;
+  top: auto;
+  cursor: default;
+  width: 210px;
 }
 .sticker textarea {
   background: rgba(255, 255, 255, 0.35);
@@ -2075,6 +2151,10 @@ ol.steps b {
   }
   .board-wrap {
     height: calc(100dvh - 190px);
+  }
+  .sticker.static {
+    width: calc(50% - 11px);
+    min-height: 130px;
   }
 }
 

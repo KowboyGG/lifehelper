@@ -4,7 +4,8 @@ import { MOODS, WD_SHORT, addDays, weekday, fmtDate, fmtMin, fmtSec, money, muta
 import { FocusTimer, HabitRow, SkipModal } from "../ui/day";
 import { GoalModal, HabitModal } from "../ui/forms";
 import { Icon } from "../ui/icons";
-import { Bar, Empty, ErrorBox, Loading, Ring } from "../ui/kit";
+import { Bar, Empty, ErrorBox, Loading, Modal, Ring } from "../ui/kit";
+import { COLORS, StickerCard, stickerLabel, useStickerCtx, type Sticker } from "../ui/stickers";
 
 export function Dashboard() {
   const { data, error } = useApi<Today>("/today");
@@ -117,6 +118,8 @@ export function Dashboard() {
             </div>
             <MiniHeat days={d.last} today={d.today} />
           </section>
+
+          <PinnedNotes streak={d.streak.current} />
 
           {/* Лента дня */}
           <div className="span-8 stack">
@@ -418,6 +421,89 @@ function Onboarding({ onGoal, onHabit }: { onGoal: () => void; onHabit: () => vo
           Просто привычка
         </button>
       </div>
+    </section>
+  );
+}
+
+/** Заметки со стены, закреплённые на «Сегодня» */
+function PinnedNotes({ streak }: { streak: number }) {
+  const { data } = useApi<Sticker[]>("/stickers");
+  const ctx = useStickerCtx(streak);
+  const [text, setText] = useState("");
+  const [pick, setPick] = useState(false);
+  if (!data) return null;
+  const pinned = data.filter((s) => s.pinned);
+  const rest = data.filter((s) => !s.pinned);
+
+  const add = async () => {
+    if (!text.trim()) return;
+    await mutate("/stickers", "POST", {
+      kind: "note",
+      text: text.trim(),
+      pinned: 1,
+      color: COLORS[Math.floor(Math.random() * 6)],
+      x: 60 + Math.round(Math.random() * 700),
+      y: 60 + Math.round(Math.random() * 400),
+    });
+    setText("");
+  };
+
+  return (
+    <section className="card span-12">
+      <div className="card-head" style={{ flexWrap: "wrap" }}>
+        <h2>Заметки</h2>
+        <span className="pill">{pinned.length}</span>
+        <div className="spacer" />
+        <input
+          className="input sm"
+          style={{ width: "min(320px, 100%)" }}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="Новая заметка и Enter…"
+        />
+        <button className="btn primary icon sm" onClick={add} aria-label="Добавить заметку">
+          <Icon name="plus" size={16} />
+        </button>
+        <button className="btn sm" onClick={() => setPick(true)}>
+          <Icon name="wall" size={15} /> Со стены
+        </button>
+      </div>
+      {pinned.length === 0 ? (
+        <div className="muted" style={{ fontSize: 14 }}>
+          Здесь будут стикеры, которые важно видеть каждый день. Напиши заметку выше или закрепи любую со стены — кнопкой 📌 на стикере или «Со стены».
+        </div>
+      ) : (
+        <div className="sticker-grid">
+          {pinned.map((s) => (
+            <StickerCard
+              key={s.id}
+              s={s}
+              ctx={ctx}
+              mode="static"
+              onChange={(patch) => mutate(`/stickers/${s.id}`, "PUT", patch)}
+              onDelete={() => confirm("Удалить стикер совсем (и со стены тоже)? Чтобы просто убрать отсюда — нажми 📌.") && mutate(`/stickers/${s.id}`, "DELETE")}
+            />
+          ))}
+        </div>
+      )}
+      {pick && (
+        <Modal title="Закрепить на «Сегодня»" sub="Стикер останется на стене и появится здесь" onClose={() => setPick(false)}>
+          <div className="stack" style={{ gap: 8 }}>
+            {rest.length === 0 && <div className="muted">На стене нет незакреплённых стикеров.</div>}
+            {rest.map((s) => (
+              <button
+                key={s.id}
+                className="btn"
+                style={{ justifyContent: "flex-start", whiteSpace: "normal", textAlign: "left" }}
+                onClick={() => mutate(`/stickers/${s.id}`, "PUT", { pinned: 1 })}
+              >
+                <span className={`sticker-dot c-${s.color}`} /> {stickerLabel(s, ctx).slice(0, 80)}
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }

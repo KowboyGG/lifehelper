@@ -3,8 +3,12 @@
 // Журнал общий с `wrangler d1 migrations apply` (таблица d1_migrations), так что оба способа совместимы.
 // Новая миграция: положи файл в migrations/ и добавь его в список ниже.
 import init from "../../migrations/0001_init.sql";
+import stickerPin from "../../migrations/0002_sticker_pin.sql";
 
-const MIGRATIONS: [name: string, sql: string][] = [["0001_init.sql", init]];
+const MIGRATIONS: [name: string, sql: string][] = [
+  ["0001_init.sql", init],
+  ["0002_sticker_pin.sql", stickerPin],
+];
 
 let ready: Promise<void> | null = null;
 
