@@ -13,9 +13,9 @@
   "d1_databases": [
     {
       "binding": "DB",
+      // id не нужен: при первом `wrangler deploy` база создастся сама,
+      // а таблицы воркер создаст при первом запросе (worker/lib/schema.ts)
       "database_name": "lifehelper",
-      // GitHub Action подставит сюда реальный id автоматически
-      "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations"
     }
   ],

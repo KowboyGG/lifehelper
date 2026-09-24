@@ -9,8 +9,14 @@ import { requireAuth } from "./lib/auth";
 import { handleUpdate, type TgUpdate } from "./bot/handlers";
 import { webhookSecret } from "./bot/telegram";
 import { runCron } from "./cron";
+import { ensureSchema } from "./lib/schema";
 
 const app = new Hono<AppEnv>();
+
+app.use("*", async (c, next) => {
+  await ensureSchema(c.env.DB);
+  await next();
+});
 
 app.onError((err, c) => {
   console.error(err);
@@ -40,6 +46,6 @@ app.all("/api/*", (c) => c.json({ error: "not found" }, 404));
 export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(runCron(env));
+    ctx.waitUntil(ensureSchema(env.DB).then(() => runCron(env)));
   },
 } satisfies ExportedHandler<Env>;

@@ -43,40 +43,45 @@
 GitHub Pages умеет только статические страницы: там нельзя хранить данные, и боту негде работать 24/7. Поэтому:
 
 - **код живёт на GitHub** (репозиторий можно сделать публичным — ни одного секрета в коде нет);
-- **при каждом пуше в `main`** GitHub Actions сам выкладывает всё на **Cloudflare Workers** — бесплатно, без сервера, работает круглосуточно;
+- **при каждом пуше** Cloudflare сам забирает код из GitHub и выкладывает его на **Cloudflare Workers** — бесплатно, без сервера, работает круглосуточно;
 - данные лежат в **Cloudflare D1** (SQLite), бот получает сообщения через вебхук, расписание — Cron Triggers.
 
 Бесплатного лимита (100 000 запросов в день) хватает с огромным запасом.
 
 **Чужие не испортят статистику:** войти можно только через Telegram, и только с аккаунта владельца. Владельцем становится тот, кто первым вошёл после деплоя (или задай `OWNER_TELEGRAM_ID`).
 
-## Запуск (≈15 минут, один раз)
+## Запуск (≈10 минут, один раз)
 
 ### 1. Бот
 1. В Telegram открой [@BotFather](https://t.me/BotFather) → `/newbot` → придумай имя.
-2. Скопируй токен вида `123456789:AA...`.
+2. Скопируй токен вида `123456789:AA...`. **Никогда не клади его в код или в репозиторий** — только в секреты Cloudflare.
 
-### 2. Cloudflare (бесплатно)
-1. Зарегистрируйся на [dash.cloudflare.com](https://dash.cloudflare.com).
-2. Открой **Workers & Pages** один раз — Cloudflare предложит выбрать поддомен `*.workers.dev`. Выбери.
-3. Скопируй **Account ID** (справа на странице Workers & Pages или в адресной строке).
-4. **My Profile → API Tokens → Create Token → Create Custom Token** с правами:
-   - Account → **Workers Scripts** → Edit
-   - Account → **D1** → Edit
-   - Account → **Account Settings** → Read
+### 2. Cloudflare подключается к GitHub
+1. Зарегистрируйся на [dash.cloudflare.com](https://dash.cloudflare.com) (бесплатно).
+2. **Workers & Pages → Create → Import a repository** → выбери `lifehelper`.
+3. Команды оставь как есть: build `npm run build`, deploy `npx wrangler deploy`. Больше ничего настраивать не нужно: база D1 создастся при первом деплое сама, таблицы — при первом открытии сайта.
 
-### 3. GitHub
-В репозитории: **Settings → Secrets and variables → Actions → New repository secret**:
+### 3. Секрет с токеном бота
+**Workers & Pages → lifehelper → Settings → Variables and Secrets → Add**:
 
-| Секрет | Значение |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | токен из шага 2.4 |
-| `CLOUDFLARE_ACCOUNT_ID` | Account ID из шага 2.3 |
-| `TELEGRAM_BOT_TOKEN` | токен бота |
-| `OWNER_TELEGRAM_ID` | *(необязательно)* твой числовой Telegram ID — узнать у [@userinfobot](https://t.me/userinfobot) |
+| Type | Name | Value |
+|---|---|---|
+| **Secret** | `TELEGRAM_BOT_TOKEN` | токен бота |
+| Secret *(необязательно)* | `OWNER_TELEGRAM_ID` | твой числовой ID — узнать у [@userinfobot](https://t.me/userinfobot) |
+
+Секреты переживают следующие деплои — задать их нужно один раз.
 
 ### 4. Деплой
-Влей ветку в `main` (или **Actions → CI / Deploy → Run workflow**). Скрипт сам создаст базу, применит миграции, выложит сайт и подключит бота. В конце лога будет адрес вида `https://lifehelper.<поддомен>.workers.dev`.
+**Deployments → Deploy** (или просто пуш в production-ветку — по умолчанию `main`; поменять можно в **Settings → Build → Branch control**). Адрес сайта — в **Settings → Domains & Routes**, вида `https://lifehelper.<поддомен>.workers.dev`.
+
+<details>
+<summary>Альтернатива: деплой через GitHub Actions</summary>
+
+Если не хочешь подключать репозиторий к Cloudflare, можно деплоить из GitHub:
+1. Cloudflare: **My Profile → API Tokens → Create Custom Token** с правами Account → Workers Scripts: Edit, D1: Edit, Account Settings: Read. Скопируй и **Account ID**.
+2. GitHub: **Settings → Secrets and variables → Actions** → `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `TELEGRAM_BOT_TOKEN`, (опц.) `OWNER_TELEGRAM_ID`.
+3. Пуш в `main` или **Actions → CI / Deploy → Run workflow**.
+</details>
 
 ### 5. Первый вход
 Открой адрес → **Войти через Telegram** → в боте нажми **Start**. Готово: ты владелец, сайт пустит внутрь. Дальше:

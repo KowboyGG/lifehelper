@@ -3,7 +3,7 @@
 // Запуск: npm run build && npm test
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
-import { spawn, execFileSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { startMockTelegram } from "./mock-telegram.mjs";
@@ -58,8 +58,8 @@ before(async () => {
     mkdirSync("web/dist", { recursive: true });
     writeFileSync("web/dist/index.html", "<!doctype html><title>test</title>");
   }
+  // чистая база без миграций — таблицы должен создать сам воркер (worker/lib/schema.ts)
   rmSync(PERSIST, { recursive: true, force: true });
-  execFileSync("npx", ["wrangler", "d1", "migrations", "apply", "lifehelper", "--local", "--persist-to", PERSIST], { stdio: "ignore" });
   tg = await startMockTelegram(TG_PORT);
   worker = spawn(
     "npx",
