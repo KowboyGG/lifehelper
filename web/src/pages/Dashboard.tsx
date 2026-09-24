@@ -19,7 +19,7 @@ export function Dashboard() {
 
   const d = data;
   const pct = d.total ? d.done / d.total : 0;
-  const pending = d.habits.filter((h) => !h.done);
+  const pending = d.habits.filter((h) => !h.done && !h.skipped);
   const distraction = d.distractions.reduce((a, x) => a + x.seconds, 0);
 
   return (
@@ -57,7 +57,9 @@ export function Dashboard() {
               {d.pass.usedToday
                 ? "🎟 Сегодня пропуск — стрик заморожен, цель ждёт завтра."
                 : d.total === 0
-                  ? "На сегодня привычек нет — день для задач и отдыха."
+                  ? d.skipped
+                    ? "Сегодня по плану отдых — привычки на пропуске."
+                    : "На сегодня привычек нет — день для задач и отдыха."
                   : d.done === d.total
                     ? "День закрыт. Ты сделал всё, что обещал себе 🎉"
                     : `Осталось: ${pending.map((h) => h.title).join(", ")}`}

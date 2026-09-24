@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../env";
-import { addMinutes, setHabitDone, toggleHabit, undoPass, usePass } from "../lib/actions";
+import { addMinutes, setHabitDone, skipHabit, toggleHabit, undoPass, usePass } from "../lib/actions";
 import { all, ensureDay, first, int, num, parseSites, run, str, type DayRow, type GoalRow, type HabitRow, type TaskRow } from "../lib/db";
 import {
   getStreak,
@@ -14,6 +14,8 @@ import {
   logOf,
   passInfo,
   skipPreview,
+  pausesOf,
+  skipsUsed,
   summarizeDay,
   summaryOf,
 } from "../lib/progress";
@@ -22,6 +24,8 @@ import { addDays, isValidDate, monthBounds } from "../lib/time";
 import { moneySummary } from "./life";
 
 export const core = new Hono<AppEnv>();
+
+const pick = (s: { done: number; total: number; skipped: number }) => ({ done: s.done, total: s.total, skipped: s.skipped });
 
 core.get("/me", async (c) => {
   const s = await getSettings(c.env.DB);
@@ -40,8 +44,7 @@ core.get("/me", async (c) => {
     botConfigured: !!c.env.TELEGRAM_BOT_TOKEN,
     timezone: s.timezone,
     today,
-    done: habits.filter((h) => h.done).length,
-    total: habits.length,
+    ...pick(summaryOf(today, habits, pass.usedToday)),
     passUsed: pass.usedToday,
     streak,
   });
@@ -88,8 +91,7 @@ core.get("/today", async (c) => {
     date,
     today,
     habits,
-    done: habits.filter((h) => h.done).length,
-    total: habits.length,
+    ...pick(summaryOf(date, habits, pass.usedToday)),
     pass,
     mood: day?.mood ?? null,
     note: day?.note ?? null,
@@ -131,6 +133,7 @@ core.get("/calendar", async (c) => {
       total: sum.total,
       done: sum.done,
       pass: sum.pass,
+      skipped: sum.skipped,
       mood: day?.mood ?? null,
       hasNote: !!day?.note,
       tasks: t?.total ?? 0,
@@ -192,6 +195,14 @@ function habitInput(b: Record<string, unknown>, partial: boolean) {
   if (b.focus_sites !== undefined) out.focus_sites = JSON.stringify(parseSites(b.focus_sites));
   if (b.blocking !== undefined) out.blocking = b.blocking ? 1 : 0;
   if (b.start_date !== undefined && isValidDate(b.start_date)) out.start_date = b.start_date;
+  if (b.skips_per_month !== undefined) out.skips_per_month = Math.max(0, Math.min(31, int(b.skips_per_month) ?? 0));
+  if (b.pauses !== undefined) {
+    const list = (Array.isArray(b.pauses) ? b.pauses : [])
+      .map((p: { from?: unknown; to?: unknown; note?: unknown }) => ({ from: p?.from, to: p?.to, note: str(p?.note, 80) ?? undefined }))
+      .filter((p): p is { from: string; to: string; note: string | undefined } => isValidDate(p.from) && isValidDate(p.to) && p.from <= p.to)
+      .slice(0, 50);
+    out.pauses = JSON.stringify(list);
+  }
   return out;
 }
 
@@ -200,19 +211,24 @@ core.get("/habits", async (c) => {
   const { today } = await localToday(db);
   const hist = await loadHistory(db);
   const goals = await all<{ id: number; title: string; emoji: string | null }>(db, "SELECT id, title, emoji FROM goals");
+  const used = await skipsUsed(db, today);
   const list = hist.habits
     .filter((h) => c.req.query("all") === "1" || !h.archived_at)
     .map((h) => {
       let scheduled = 0;
       let done = 0;
       let minutes = 0;
-      const recent: (0 | 1 | 2 | 3)[] = []; // 0 не по плану, 1 не сделано, 2 сделано, 3 пропуск
+      const recent: (0 | 1 | 2 | 3)[] = []; // 0 не по плану, 1 не сделано, 2 сделано, 3 пропуск (общий или свой)
       for (let i = 27; i >= 0; i--) {
         const d = addDays(today, -i);
         const log = logOf(hist, h.id, d);
         minutes += log?.minutes ?? 0;
         if (!isScheduled(h, d)) {
           recent.push(0);
+          continue;
+        }
+        if (log?.skipped && !log.done) {
+          recent.push(3);
           continue;
         }
         if (d < today || log?.done) scheduled++;
@@ -226,6 +242,8 @@ core.get("/habits", async (c) => {
         ...h,
         focus_sites: JSON.parse(h.focus_sites || "[]"),
         blocking: !!h.blocking,
+        pauses: pausesOf(h),
+        skips_left: Math.max(0, h.skips_per_month - (used.get(h.id) ?? 0)),
         goal_title: g ? `${g.emoji ? g.emoji + " " : ""}${g.title}` : null,
         streak: habitStreak(hist, h, today),
         rate28: scheduled ? done / scheduled : null,
@@ -245,8 +263,8 @@ core.post("/habits", async (c) => {
   const max = await first<{ m: number }>(db, "SELECT COALESCE(MAX(sort), 0) AS m FROM habits");
   const row = await first<{ id: number }>(
     db,
-    `INSERT INTO habits(title, emoji, goal_id, type, target_minutes, days, start_url, focus_sites, blocking, start_date, sort, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+    `INSERT INTO habits(title, emoji, goal_id, type, target_minutes, days, start_url, focus_sites, blocking, skips_per_month, pauses, start_date, sort, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
     b.title,
     b.emoji ?? null,
     b.goal_id ?? null,
@@ -256,6 +274,8 @@ core.post("/habits", async (c) => {
     b.start_url ?? null,
     b.focus_sites ?? "[]",
     b.blocking ?? 1,
+    b.skips_per_month ?? 0,
+    b.pauses ?? "[]",
     (b.start_date as string) ?? today,
     (max?.m ?? 0) + 1,
     Date.now(),
@@ -297,6 +317,14 @@ core.post("/habits/:id/toggle", async (c) => {
   const id = Number(c.req.param("id"));
   const r = typeof done === "boolean" ? ((await setHabitDone(c.env.DB, id, d, done, "web")) ? done : null) : await toggleHabit(c.env.DB, id, d, "web");
   return r === null ? c.json({ error: "not found" }, 404) : c.json({ done: r });
+});
+
+core.post("/habits/:id/skip", async (c) => {
+  const { date, skip } = await c.req.json<{ date?: string; skip?: boolean }>();
+  const { today } = await localToday(c.env.DB);
+  const d = isValidDate(date) ? date : today;
+  const r = await skipHabit(c.env.DB, Number(c.req.param("id")), d, skip !== false);
+  return r.ok ? c.json(r) : c.json({ error: r.error }, 400);
 });
 
 core.post("/habits/:id/minutes", async (c) => {
@@ -360,10 +388,16 @@ core.post("/goals", async (c) => {
 });
 
 core.put("/goals/:id", async (c) => {
+  const id = Number(c.req.param("id"));
   const b = goalInput(await c.req.json(), true);
   if ("title" in b && !b.title) return c.json({ error: "Нужно название" }, 400);
   const keys = Object.keys(b);
-  if (keys.length) await run(c.env.DB, `UPDATE goals SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, ...keys.map((k) => b[k]), Number(c.req.param("id")));
+  if (keys.length) await run(c.env.DB, `UPDATE goals SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, ...keys.map((k) => b[k]), id);
+  if (b.start_date) {
+    // Старт цели сдвинули вперёд — привычки цели тоже начинаются не раньше, иначе дни до старта висят «сорванными»
+    const r = await run(c.env.DB, "UPDATE habits SET start_date = ? WHERE goal_id = ? AND start_date < ?", b.start_date, id, b.start_date);
+    if ((r.meta.changes ?? 0) > 0) await invalidateStreak(c.env.DB);
+  }
   return c.json({ ok: true });
 });
 
@@ -389,7 +423,7 @@ core.get("/tasks", async (c) => {
   const view = c.req.query("view") ?? "all";
   const base = "SELECT t.*, g.title AS goal_title, g.emoji AS goal_emoji FROM tasks t LEFT JOIN goals g ON g.id = t.goal_id";
   let rows: TaskRow[];
-  if (view === "inbox") rows = await all(db, `${base} WHERE t.date IS NULL AND t.done_at IS NULL ORDER BY t.priority DESC, t.id DESC`);
+  if (view === "inbox") rows = await all(db, `${base} WHERE t.date IS NULL AND t.done_at IS NULL AND t.goal_id IS NULL ORDER BY t.priority DESC, t.id DESC`);
   else if (view === "today")
     rows = await all(db, `${base} WHERE (t.date = ?) OR (t.date < ? AND t.done_at IS NULL) ORDER BY t.done_at IS NOT NULL, t.date, t.time, t.priority DESC`, today, today);
   else if (view === "upcoming") rows = await all(db, `${base} WHERE t.date > ? AND t.done_at IS NULL ORDER BY t.date, t.time, t.id`, today);

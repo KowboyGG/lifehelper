@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Page } from "../App";
-import { fmtMin, plural, useApi } from "../lib";
+import { fmtMin, fmtShort, plural, useApi } from "../lib";
 import { HabitModal, type HabitFull } from "../ui/forms";
 import { Icon } from "../ui/icons";
 import { Empty, ErrorBox, Loading, daysLabel } from "../ui/kit";
@@ -69,6 +69,21 @@ export function HabitsPage() {
                 </span>
               )}
               {h.start_url && <span className="pill blue">▶ {h.start_url.replace(/^https?:\/\/(www\.)?/, "").slice(0, 28)}</span>}
+              {h.skips_per_month > 0 && (
+                <span className="pill" title="Своих пропусков осталось в этом месяце">
+                  ↷ {h.skips_left} из {h.skips_per_month} в мес.
+                </span>
+              )}
+              {(() => {
+                const today = new Date().toISOString().slice(0, 10);
+                const p = h.pauses.find((x) => x.to >= today);
+                if (!p) return null;
+                return (
+                  <span className="pill blue" title={p.note}>
+                    ⏸ {p.from <= today ? `пауза до ${fmtShort(p.to)}` : `пауза с ${fmtShort(p.from)}`}
+                  </span>
+                );
+              })()}
             </div>
           </section>
         ))}

@@ -213,6 +213,9 @@ export interface HabitDay {
   days: string;
   done: boolean;
   minutes: number;
+  skipped: boolean;
+  skips_per_month: number;
+  skips_left: number;
   streak?: number;
 }
 
@@ -249,6 +252,7 @@ export interface Goal {
   habits: { id: number; title: string; emoji: string | null; type: string; target_minutes: number | null }[];
   tasks_done: number;
   tasks_total: number;
+  steps?: { id: number; title: string; done_at: number | null; date: string | null }[];
 }
 
 export interface Task {
@@ -269,6 +273,7 @@ export interface DaySummary {
   total: number;
   done: number;
   pass: boolean;
+  skipped?: number;
 }
 
 export interface Today {
@@ -277,6 +282,7 @@ export interface Today {
   habits: HabitDay[];
   done: number;
   total: number;
+  skipped: number;
   pass: PassInfo;
   mood: number | null;
   note: string | null;

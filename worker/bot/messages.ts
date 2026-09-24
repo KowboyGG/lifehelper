@@ -1,6 +1,6 @@
 // Тексты и клавиатуры бота
 import { all, first, type DayRow, type TaskRow } from "../lib/db";
-import { getStreak, habitsForDay, loadGoals, loadHistory, localToday, passInfo, summarizeDay, summaryOf, type HabitDay } from "../lib/progress";
+import { getStreak, habitsForDay, pendingOf, loadGoals, loadHistory, localToday, passInfo, summarizeDay, summaryOf, type HabitDay } from "../lib/progress";
 import { addDays, fmtDate, fmtMinutes, plural, weekStart } from "../lib/time";
 import { moneySummary } from "../api/life";
 import { esc, type Keyboard } from "./telegram";
@@ -48,12 +48,13 @@ export async function checkinView(db: D1Database, date: string, closed = false):
   const todayHabits = date === today ? habits : await habitsForDay(db, today);
   const todayPass = date === today ? pass.usedToday : (await passInfo(db, s, today)).usedToday;
   const streak = await getStreak(db, s, today, summaryOf(today, todayHabits, todayPass));
-  const done = habits.filter((h) => h.done).length;
+  const { done, total } = summaryOf(date, habits, pass.usedToday);
+  const mark = (h: HabitDay) => (h.done ? "✅" : h.skipped ? "↷" : "⬜");
 
   const lines: string[] = [`🌙 <b>Итоги дня</b> · ${fmtDate(date, true)}`, ""];
   if (!habits.length) lines.push("На этот день ничего не запланировано.");
-  for (const h of habits) lines.push(`${h.done ? "✅" : "⬜"} ${esc(habitLabel(h))}`);
-  if (habits.length) lines.push("", `${bar(done, habits.length)}  <b>${done}/${habits.length}</b>`);
+  for (const h of habits) lines.push(`${mark(h)} ${esc(habitLabel(h))}${h.skipped ? " — пропуск" : ""}`);
+  if (total) lines.push("", `${bar(done, total)}  <b>${done}/${total}</b>`);
   lines.push(`🔥 Стрик: <b>${streak.current}</b>${streak.best > streak.current ? ` · рекорд ${streak.best}` : streak.current > 1 ? " · это рекорд!" : ""}`);
   if (pass.usedToday) lines.push("🎟 День взят как пропуск — стрик заморожен.");
   if (day?.mood) lines.push(`Настроение: ${MOODS[day.mood - 1]}`);
@@ -66,11 +67,19 @@ export async function checkinView(db: D1Database, date: string, closed = false):
   }
 
   if (habits.length) lines.push("", "Отметь, что сделал 👇");
-  for (const h of habits) keyboard.push([{ text: `${h.done ? "✅" : "⬜"} ${habitLabel(h)}`.slice(0, 60), callback_data: `t:${date}:${h.id}` }]);
+  for (const h of habits) {
+    if (h.skipped) {
+      keyboard.push([{ text: `↷ ${habitLabel(h)} — вернуть`.slice(0, 60), callback_data: `hu:${date}:${h.id}` }]);
+      continue;
+    }
+    const row = [{ text: `${mark(h)} ${habitLabel(h)}`.slice(0, 60), callback_data: `t:${date}:${h.id}` }];
+    if (!h.done && h.skips_left > 0) row.push({ text: `↷ ${h.skips_left}`, callback_data: `hs:${date}:${h.id}` });
+    keyboard.push(row);
+  }
   keyboard.push(MOODS.map((m, i) => ({ text: day?.mood === i + 1 ? `[${m}]` : m, callback_data: `m:${date}:${i + 1}` })));
   const last = [];
   if (pass.usedToday) last.push({ text: "↩ Отменить пропуск", callback_data: `un:${date}` });
-  else if (done < habits.length && pass.left > 0) last.push({ text: `🎟 Пропуск (${pass.left})`, callback_data: `sk:${date}` });
+  else if (done < total && pass.left > 0) last.push({ text: `🎟 Пропуск (${pass.left})`, callback_data: `sk:${date}` });
   last.push({ text: "✔ Готово", callback_data: `cl:${date}` });
   keyboard.push(last);
   return { text: lines.join("\n"), keyboard };
@@ -88,7 +97,7 @@ export async function morningText(db: D1Database): Promise<string> {
   const lines = [`☀️ <b>Доброе утро!</b> Сегодня ${fmtDate(today, true)}.`, ""];
   if (habits.length) {
     lines.push("<b>План на день:</b>");
-    for (const h of habits) lines.push(`• ${esc(`${h.emoji ? h.emoji + " " : ""}${h.title}`)}${h.type === "minutes" ? ` — ${fmtMinutes(h.target_minutes ?? 0)}` : ""}`);
+    for (const h of habits) lines.push(`• ${esc(`${h.emoji ? h.emoji + " " : ""}${h.title}`)}${h.type === "minutes" ? ` — ${fmtMinutes(h.target_minutes ?? 0)}` : ""}${h.skipped ? " <i>(пропуск)</i>" : ""}`);
   } else lines.push("Привычек на сегодня нет — свободный день.");
   if (tasks.length) {
     lines.push("", "<b>Задачи:</b>");
@@ -107,7 +116,7 @@ export async function reminderText(db: D1Database): Promise<string | null> {
   const { s, today, minutes } = await localToday(db);
   const pass = await passInfo(db, s, today);
   if (pass.usedToday) return null;
-  const pending = (await habitsForDay(db, today)).filter((h) => !h.done);
+  const pending = pendingOf(await habitsForDay(db, today));
   if (!pending.length) return null;
   const left = 24 * 60 - minutes;
   const lines = [`⏰ <b>Ещё не сделано</b> — до конца дня ${fmtMinutes(left)}:`, ""];

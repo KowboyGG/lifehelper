@@ -100,7 +100,7 @@ function notify(title, message) {
 }
 
 function updateBadge(st, sess) {
-  const pending = (st?.habits || []).filter((h) => !h.done);
+  const pending = (st?.habits || []).filter((h) => !h.done && !h.skipped);
   let text = "";
   let color = "#f0b75e";
   if (!st) text = "";
@@ -199,7 +199,7 @@ async function decide(url, tabId) {
   const host = hostOf(url);
   if (!host || (config.apiUrl && host === hostOf(config.apiUrl))) return { block: false };
 
-  const pending = state.habits.filter((h) => !h.done);
+  const pending = state.habits.filter((h) => !h.done && !h.skipped);
   const focusHabit = pending.find((h) => h.type === "minutes" && focusSites(h).some((p) => matchSite(url, p)));
   let sess = session;
   // Зашёл на сайт для занятий сам — таймер включается автоматически
@@ -254,14 +254,19 @@ async function onTick(msg, tabId) {
     })();
 
     if (focusHere) {
-      if (msg.active) {
+      // Время идёт, пока вкладка на экране — без проверки кликов (видео-уроки засчитываются целиком).
+      // Защита от двойного счёта, если учебных вкладок на экране две: не чаще одного тика в ~12 секунд.
+      const now = Date.now();
+      if (!session.lastTickAt || now - session.lastTickAt >= 12000) {
         const s = (pending.sessions[session.id] ||= { habitId: session.habitId, startedAt: session.startedAt, seconds: 0, clicks: 0, keys: 0, scrolls: 0 });
         s.seconds += seconds;
         s.clicks += msg.clicks | 0;
         s.keys += msg.keys | 0;
         s.scrolls += msg.scrolls | 0;
+        session.lastTickAt = now;
+        await save({ session });
       }
-    } else {
+    } else if (msg.focused !== false) {
       const d = blockedDomain(state, host);
       if (d) pending.sites[d] = (pending.sites[d] || 0) + seconds;
     }

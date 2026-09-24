@@ -56,7 +56,7 @@ function render() {
         </div>
         <div class="bar"><i style="width:${Math.min(100, (mins / target) * 100)}%"></i></div>
         <div class="row between" style="margin-top:8px">
-          <span class="muted mono" style="font-size:12px">${Math.floor(mins)} / ${target} мин · считается активное время</span>
+          <span class="muted mono" style="font-size:12px">${Math.floor(mins)} / ${target} мин · считается, пока вкладка на экране</span>
           <button id="stop">Стоп</button>
         </div>
       </section>`;
@@ -71,10 +71,16 @@ function render() {
   if (!state.habits.length) html += `<div class="muted" style="padding:8px 0">На сегодня привычек нет.</div>`;
   for (const h of state.habits) {
     const mins = h.minutes + pendingSeconds(h.id) / 60;
-    const meta = h.type === "minutes" ? `${Math.floor(mins)} / ${h.target_minutes} мин` : h.done ? "сделано" : "отметь на сайте или в боте";
-    const canStart = !h.done && h.type === "minutes" && session?.habitId !== h.id;
+    const meta = h.skipped
+      ? "пропуск на сегодня"
+      : h.type === "minutes"
+        ? `${Math.floor(mins)} / ${h.target_minutes} мин`
+        : h.done
+          ? "сделано"
+          : "отметь на сайте или в боте";
+    const canStart = !h.done && !h.skipped && h.type === "minutes" && session?.habitId !== h.id;
     html += `
-      <div class="habit${h.done ? " done" : ""}">
+      <div class="habit${h.done || h.skipped ? " done" : ""}">
         <div class="em">${esc(h.emoji || "•")}</div>
         <div class="body">
           <div class="t">${esc(h.title)}</div>

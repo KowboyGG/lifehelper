@@ -11,6 +11,8 @@ export interface HabitRow {
   start_url: string | null;
   focus_sites: string;
   blocking: number;
+  skips_per_month: number;
+  pauses: string; // JSON [{from, to, note}]
   start_date: string;
   archived_at: string | null;
   sort: number;
@@ -22,6 +24,7 @@ export interface LogRow {
   date: string;
   done: number;
   minutes: number;
+  skipped: number;
 }
 
 export interface DayRow {

@@ -14,6 +14,9 @@ export interface HabitFull {
   start_url: string | null;
   focus_sites: string[];
   blocking: boolean;
+  skips_per_month: number;
+  skips_left: number;
+  pauses: { from: string; to: string; note?: string }[];
   start_date: string;
   archived_at: string | null;
   goal_title: string | null;
@@ -31,7 +34,8 @@ export function GoalModal({ goal, onClose }: { goal?: Goal; onClose: () => void 
     why: goal?.why ?? "",
     start_date: goal?.start_date ?? new Date().toISOString().slice(0, 10),
     deadline: goal?.deadline ?? "",
-    kind: goal?.target_value ? "value" : "habit",
+    kind: (goal?.target_value ? "value" : goal && goal.habits.length === 0 ? "steps" : "habit") as "habit" | "value" | "steps",
+    steps: "",
     target_value: goal?.target_value ?? "",
     current_value: goal?.current_value ?? 0,
     unit: goal?.unit ?? "",
@@ -61,6 +65,11 @@ export function GoalModal({ goal, onClose }: { goal?: Goal; onClose: () => void 
         await mutate(`/goals/${goal.id}`, "PUT", body);
       } else {
         const { id } = await mutate<{ id: number }>("/goals", "POST", body);
+        if (f.kind === "steps") {
+          for (const title of f.steps.split("\n").map((x) => x.trim()).filter(Boolean)) {
+            await mutate("/tasks", "POST", { title, goal_id: id });
+          }
+        }
         if (f.kind === "habit" && (f.daily_type === "check" || f.daily > 0)) {
           await mutate("/habits", "POST", {
             title: f.title.replace(/^(выучить|научиться|освоить)\s+/i, "").replace(/^./, (c) => c.toUpperCase()),
@@ -113,7 +122,7 @@ export function GoalModal({ goal, onClose }: { goal?: Goal; onClose: () => void 
           <Field label="Старт">
             <input className="input" type="date" value={f.start_date} onChange={(e) => set("start_date", e.target.value)} />
           </Field>
-          <Field label="Дедлайн">
+          <Field label="Дедлайн" hint="Можно оставить пустым — цель без срока">
             <input className="input" type="date" value={f.deadline} onChange={(e) => set("deadline", e.target.value)} />
           </Field>
         </div>
@@ -122,12 +131,23 @@ export function GoalModal({ goal, onClose }: { goal?: Goal; onClose: () => void 
             value={f.kind}
             onChange={(v) => set("kind", v)}
             options={[
-              ["habit", "Ежедневной практикой"],
-              ["value", "Числом (книги, деньги…)"],
+              ["habit", "Практикой"],
+              ["value", "Числом"],
+              ["steps", "Шагами / просто цель"],
             ]}
           />
         </Field>
-        {f.kind === "value" ? (
+        {f.kind === "steps" ? (
+          goal ? (
+            <div className="muted" style={{ fontSize: 14 }}>
+              Без ежедневной нормы. Прогресс — по шагам: добавляй и отмечай их прямо на карточке цели. Когда цель достигнута — жми «🏆 Достигнута».
+            </div>
+          ) : (
+            <Field label="Шаги (каждый с новой строки, необязательно)" hint="Ничего не нужно делать каждый день — просто список шагов. Можно добавить позже на карточке цели.">
+              <textarea className="input" value={f.steps} onChange={(e) => set("steps", e.target.value)} placeholder={"Выбрать школу\nЗаписаться на пробный урок\nСдать на права"} />
+            </Field>
+          )
+        ) : f.kind === "value" ? (
           <div className="form-row">
             <Field label="Сколько нужно">
               <input className="input" type="number" value={f.target_value} onChange={(e) => set("target_value", e.target.value)} placeholder="12" />
@@ -189,7 +209,15 @@ export function HabitModal({ habit, goalId, onClose }: { habit?: HabitFull; goal
     start_url: habit?.start_url ?? "",
     focus_sites: (habit?.focus_sites ?? []).join("\n"),
     start_date: habit?.start_date ?? new Date().toISOString().slice(0, 10),
+    skips_per_month: habit?.skips_per_month ?? 0,
+    pauses: habit?.pauses ?? [],
   });
+  const [pause, setPause] = useState({ from: "", to: "", note: "" });
+  const addPause = () => {
+    if (!pause.from || !pause.to || pause.to < pause.from) return toast("Укажи даты «с» и «по»", true);
+    set("pauses", [...f.pauses, { ...pause, note: pause.note || undefined }].sort((a, b) => a.from.localeCompare(b.from)));
+    setPause({ from: "", to: "", note: "" });
+  };
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
 
   const save = async () => {
@@ -255,9 +283,6 @@ export function HabitModal({ habit, goalId, onClose }: { habit?: HabitFull; goal
               ))}
             </select>
           </Field>
-          <Field label="Начало">
-            <input className="input" type="date" value={f.start_date} onChange={(e) => set("start_date", e.target.value)} />
-          </Field>
         </div>
         <div className="row wrap" style={{ gap: 18, alignItems: "flex-end" }}>
           <Field label="Как отмечать">
@@ -279,6 +304,43 @@ export function HabitModal({ habit, goalId, onClose }: { habit?: HabitFull; goal
         <Field label="Дни">
           <DaysPicker value={f.days} onChange={(v) => set("days", v)} />
         </Field>
+        <div className="form-row">
+          <Field label="Своих пропусков в месяц" hint="Например, зал: можно 2 раза в месяц не пойти — стрик не сгорит. 0 — без пропусков.">
+            <input className="input" type="number" min={0} max={31} value={f.skips_per_month} onChange={(e) => set("skips_per_month", Math.max(0, Number(e.target.value) || 0))} />
+          </Field>
+          <Field label="Начало" hint="Дни до этой даты не считаются вообще">
+            <input className="input" type="date" value={f.start_date} onChange={(e) => set("start_date", e.target.value)} />
+          </Field>
+        </div>
+        <div>
+          <div className="label" style={{ marginBottom: 8 }}>
+            Паузы
+          </div>
+          <div className="faint" style={{ fontSize: 12.5, marginBottom: 10 }}>
+            Нет абонемента, отпуск, болезнь — в эти дни привычки как будто нет: не в плане, не в стрике.
+          </div>
+          {f.pauses.map((p, i) => (
+            <div key={i} className="row" style={{ marginBottom: 6 }}>
+              <span className="pill blue">
+                {p.from} → {p.to}
+              </span>
+              {p.note && <span className="muted" style={{ fontSize: 13 }}>{p.note}</span>}
+              <div style={{ flex: 1 }} />
+              <button type="button" className="btn ghost xs" onClick={() => set("pauses", f.pauses.filter((_, j) => j !== i))}>
+                убрать
+              </button>
+            </div>
+          ))}
+          <div className="row wrap" style={{ gap: 8 }}>
+            <input className="input sm" type="date" style={{ width: 160 }} value={pause.from} onChange={(e) => setPause({ ...pause, from: e.target.value })} aria-label="Пауза с" />
+            <span className="faint">—</span>
+            <input className="input sm" type="date" style={{ width: 160 }} value={pause.to} onChange={(e) => setPause({ ...pause, to: e.target.value })} aria-label="Пауза по" />
+            <input className="input sm" style={{ flex: "1 1 140px" }} value={pause.note} onChange={(e) => setPause({ ...pause, note: e.target.value })} placeholder="почему (необязательно)" />
+            <button type="button" className="btn sm" onClick={addPause}>
+              Добавить паузу
+            </button>
+          </div>
+        </div>
         <div className="setting-row" style={{ borderTop: "1px solid var(--line)" }}>
           <div className="txt">
             <div className="t">Блокировать отвлечения, пока не сделано</div>

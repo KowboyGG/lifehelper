@@ -3,10 +3,33 @@ import { all, first, run, type GoalRow, type HabitRow, type LogRow, type TaskRow
 import { getSettings, parseList, setSettings, type Settings } from "./settings";
 import { addDays, diffDays, eachDay, fmtDate, fmtMinutes, nowInTz, plural, timeToMinutes, weekStart, weekday } from "./time";
 
+export interface Pause {
+  from: string;
+  to: string;
+  note?: string;
+}
+
+const pauseCache = new Map<string, Pause[]>();
+export function pausesOf(h: Pick<HabitRow, "pauses">): Pause[] {
+  const raw = h.pauses || "[]";
+  let p = pauseCache.get(raw);
+  if (!p) {
+    try {
+      p = JSON.parse(raw) as Pause[];
+    } catch {
+      p = [];
+    }
+    pauseCache.set(raw, p);
+  }
+  return p;
+}
+
 export function isScheduled(h: HabitRow, date: string): boolean {
   if (date < h.start_date) return false;
   if (h.archived_at && date >= h.archived_at) return false;
-  return h.days[weekday(date)] === "1";
+  if (h.days[weekday(date)] !== "1") return false;
+  // пауза: нет абонемента, отпуск, болезнь — дня как будто нет
+  return !pausesOf(h).some((p) => date >= p.from && date <= p.to);
 }
 
 /** Сколько минут засчитывается в цель: отмеченная вручную привычка = не меньше нормы */
@@ -30,7 +53,7 @@ const key = (id: number, date: string) => `${id}|${date}`;
 export async function loadHistory(db: D1Database, from = "0000-00-00"): Promise<History> {
   const [habits, logs, passes] = await Promise.all([
     all<HabitRow>(db, "SELECT * FROM habits ORDER BY sort, id"),
-    all<LogRow>(db, "SELECT habit_id, date, done, minutes FROM habit_logs WHERE date >= ?", from),
+    all<LogRow>(db, "SELECT habit_id, date, done, minutes, skipped FROM habit_logs WHERE date >= ?", from),
     all<{ date: string }>(db, "SELECT date FROM days WHERE pass_used = 1 AND date >= ?", from),
   ]);
   const map = new Map<string, LogRow>();
@@ -45,20 +68,26 @@ export function logOf(hist: History, id: number, date: string): LogRow | undefin
 
 export interface DaySummary {
   date: string;
-  total: number;
+  total: number; // запланировано минус личные пропуски привычек
   done: number;
   pass: boolean;
+  skipped: number; // привычки, пропущенные по своему месячному лимиту
 }
 
 export function summarizeDay(hist: History, date: string): DaySummary {
   let total = 0;
   let done = 0;
+  let skipped = 0;
   for (const h of hist.habits) {
     if (!isScheduled(h, date)) continue;
-    total++;
-    if (logOf(hist, h.id, date)?.done) done++;
+    const log = logOf(hist, h.id, date);
+    if (log?.done) {
+      total++;
+      done++;
+    } else if (log?.skipped) skipped++;
+    else total++;
   }
-  return { date, total, done, pass: hist.passes.has(date) };
+  return { date, total, done, pass: hist.passes.has(date), skipped };
 }
 
 type Outcome = "success" | "fail" | "neutral";
@@ -93,8 +122,9 @@ export function habitStreak(hist: History, h: HabitRow, today: string): number {
   let n = logOf(hist, h.id, today)?.done ? 1 : 0;
   for (let d = addDays(today, -1); d >= h.start_date; d = addDays(d, -1)) {
     if (!isScheduled(h, d)) continue;
-    if (logOf(hist, h.id, d)?.done) n++;
-    else if (!hist.passes.has(d)) break;
+    const log = logOf(hist, h.id, d);
+    if (log?.done) n++;
+    else if (!hist.passes.has(d) && !log?.skipped) break;
   }
   return n;
 }
@@ -166,6 +196,8 @@ export interface GoalView extends GoalRow {
   habits: { id: number; title: string; emoji: string | null; type: string; target_minutes: number | null }[];
   tasks_done: number;
   tasks_total: number;
+  /** шаги цели — задачи, привязанные к ней (для целей без ежедневной нормы) */
+  steps?: { id: number; title: string; done_at: number | null; date: string | null }[];
 }
 
 export function computeGoal(g: GoalRow, hist: History, taskStats: { done: number; total: number }, today: string): GoalView {
@@ -282,7 +314,17 @@ export async function loadGoals(db: D1Database, hist: History, today: string, st
     "SELECT goal_id, SUM(done_at IS NOT NULL) AS done, COUNT(*) AS total FROM tasks WHERE goal_id IS NOT NULL GROUP BY goal_id",
   );
   const byGoal = new Map(stats.map((s) => [s.goal_id, s]));
-  return goals.map((g) => computeGoal(g, hist, byGoal.get(g.id) ?? { done: 0, total: 0 }, today));
+  const steps = await all<{ id: number; goal_id: number; title: string; done_at: number | null; date: string | null }>(
+    db,
+    "SELECT id, goal_id, title, done_at, date FROM tasks WHERE goal_id IS NOT NULL ORDER BY done_at IS NOT NULL, done_at DESC, id",
+  );
+  return goals.map((g) => ({
+    ...computeGoal(g, hist, byGoal.get(g.id) ?? { done: 0, total: 0 }, today),
+    steps: steps
+      .filter((t) => t.goal_id === g.id)
+      .slice(0, 40)
+      .map(({ goal_id: _g, ...t }) => t),
+  }));
 }
 
 // ---------------------------------------------------------------- день целиком
@@ -302,19 +344,46 @@ export interface HabitDay {
   days: string;
   done: boolean;
   minutes: number;
+  /** пропущено по личному лимиту привычки (не рвёт стрик) */
+  skipped: boolean;
+  skips_per_month: number;
+  skips_left: number;
   streak?: number;
 }
 
-export async function habitsForDay(db: D1Database, date: string): Promise<HabitDay[]> {
-  const rows = await all<HabitRow & { goal_title: string | null; goal_why: string | null; done: number | null; minutes: number | null }>(
+export function monthRange(date: string): [string, string] {
+  const start = `${date.slice(0, 7)}-01`;
+  const [y, m] = date.split("-").map(Number);
+  const end = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  return [start, end];
+}
+
+/** Сколько личных пропусков привычки уже потрачено в месяце этой даты */
+export async function skipsUsed(db: D1Database, date: string, exceptDate?: string): Promise<Map<number, number>> {
+  const [start, end] = monthRange(date);
+  const rows = await all<{ habit_id: number; n: number }>(
     db,
-    `SELECT h.*, g.title AS goal_title, g.why AS goal_why, l.done AS done, l.minutes AS minutes
-       FROM habits h
-       LEFT JOIN goals g ON g.id = h.goal_id
-       LEFT JOIN habit_logs l ON l.habit_id = h.id AND l.date = ?
-      ORDER BY h.sort, h.id`,
-    date,
+    "SELECT habit_id, COUNT(*) AS n FROM habit_logs WHERE skipped = 1 AND done = 0 AND date BETWEEN ? AND ? AND date != ? GROUP BY habit_id",
+    start,
+    end,
+    exceptDate ?? "",
   );
+  return new Map(rows.map((r) => [r.habit_id, r.n]));
+}
+
+export async function habitsForDay(db: D1Database, date: string): Promise<HabitDay[]> {
+  const [rows, used] = await Promise.all([
+    all<HabitRow & { goal_title: string | null; goal_why: string | null; done: number | null; minutes: number | null; skipped: number | null }>(
+      db,
+      `SELECT h.*, g.title AS goal_title, g.why AS goal_why, l.done AS done, l.minutes AS minutes, l.skipped AS skipped
+         FROM habits h
+         LEFT JOIN goals g ON g.id = h.goal_id
+         LEFT JOIN habit_logs l ON l.habit_id = h.id AND l.date = ?
+        ORDER BY h.sort, h.id`,
+      date,
+    ),
+    skipsUsed(db, date),
+  ]);
   return rows
     .filter((h) => isScheduled(h, date))
     .map((h) => ({
@@ -332,11 +401,18 @@ export async function habitsForDay(db: D1Database, date: string): Promise<HabitD
       days: h.days,
       done: !!h.done,
       minutes: h.minutes ?? 0,
+      skipped: !h.done && !!h.skipped,
+      skips_per_month: h.skips_per_month ?? 0,
+      skips_left: Math.max(0, (h.skips_per_month ?? 0) - (used.get(h.id) ?? 0)),
     }));
 }
 
+/** Дела дня, которые ещё ждут: не сделаны и не пропущены по личному лимиту */
+export const pendingOf = (habits: HabitDay[]) => habits.filter((h) => !h.done && !h.skipped);
+
 export function summaryOf(date: string, habits: HabitDay[], pass: boolean): DaySummary {
-  return { date, total: habits.length, done: habits.filter((h) => h.done).length, pass };
+  const skipped = habits.filter((h) => h.skipped).length;
+  return { date, total: habits.length - skipped, done: habits.filter((h) => h.done).length, pass, skipped };
 }
 
 export async function localToday(db: D1Database): Promise<{ s: Settings; today: string; minutes: number; time: string }> {
@@ -369,7 +445,7 @@ const tracked1 = (g: GoalView) => g.habits.filter((h) => h.type === "minutes").l
 export async function skipPreview(db: D1Database, date: string): Promise<SkipPreview> {
   const { s, today } = await localToday(db);
   const [passes, habits] = await Promise.all([passInfo(db, s, date), habitsForDay(db, date)]);
-  const pending = habits.filter((h) => !h.done);
+  const pending = pendingOf(habits);
 
   const res: SkipPreview = {
     date,

@@ -1,6 +1,8 @@
 // LifeHelper — скрипт на каждой странице:
 // 1) спрашивает фон, нужно ли закрыть сайт экраном «Сначала — дело»;
-// 2) раз в 15 секунд сообщает, что вкладка активна (для учёта фокуса и отвлечений).
+// 2) раз в 15 секунд сообщает, что вкладка открыта на экране (для учёта фокуса и отвлечений).
+//    Клики/клавиши только считаются для статистики — на засчитывание времени они не влияют,
+//    чтобы учёба по видео засчитывалась полностью.
 (() => {
   if (window.top !== window || window.__lifehelper) return;
   window.__lifehelper = true;
@@ -44,9 +46,9 @@
   const mediaPlaying = () => [...document.querySelectorAll("video, audio")].some((m) => !m.paused && !m.ended && m.readyState > 2);
 
   setInterval(() => {
-    if (document.visibilityState !== "visible" || !document.hasFocus() || overlay) return;
+    if (document.visibilityState !== "visible" || overlay) return;
     const active = Date.now() - lastActivity < 60000 || mediaPlaying();
-    send({ type: "tick", url: location.href, seconds: TICK, active, ...counters });
+    send({ type: "tick", url: location.href, seconds: TICK, active, focused: document.hasFocus(), ...counters });
     counters = { clicks: 0, keys: 0, scrolls: 0 };
   }, TICK * 1000);
 

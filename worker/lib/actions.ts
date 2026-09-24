@@ -1,6 +1,6 @@
 // Изменения, которые делают и сайт, и бот, и расширение
 import { ensureDay, first, run, type HabitRow } from "./db";
-import { invalidateStreak, localToday, skipPreview } from "./progress";
+import { invalidateStreak, localToday, skipPreview, skipsUsed } from "./progress";
 
 export async function setHabitDone(db: D1Database, habitId: number, date: string, done: boolean, source: string): Promise<boolean> {
   const h = await first<HabitRow>(db, "SELECT * FROM habits WHERE id = ?", habitId);
@@ -8,7 +8,8 @@ export async function setHabitDone(db: D1Database, habitId: number, date: string
   await run(
     db,
     `INSERT INTO habit_logs(habit_id, date, done, minutes, source, updated_at) VALUES (?, ?, ?, 0, ?, ?)
-     ON CONFLICT(habit_id, date) DO UPDATE SET done = excluded.done, source = excluded.source, updated_at = excluded.updated_at`,
+     ON CONFLICT(habit_id, date) DO UPDATE SET done = excluded.done, source = excluded.source, updated_at = excluded.updated_at,
+       skipped = CASE WHEN excluded.done = 1 THEN 0 ELSE skipped END`,
     habitId,
     date,
     done ? 1 : 0,
@@ -17,6 +18,31 @@ export async function setHabitDone(db: D1Database, habitId: number, date: string
   );
   await afterChange(db, date);
   return true;
+}
+
+/** Личный пропуск привычки (например, зал): не больше skips_per_month в календарном месяце */
+export async function skipHabit(db: D1Database, habitId: number, date: string, skip: boolean): Promise<{ ok: boolean; error?: string; left?: number }> {
+  const h = await first<HabitRow>(db, "SELECT * FROM habits WHERE id = ?", habitId);
+  if (!h) return { ok: false, error: "Привычка не найдена" };
+  if (skip) {
+    const limit = h.skips_per_month ?? 0;
+    if (limit <= 0) return { ok: false, error: "У этой привычки нет пропусков. Их можно включить в её настройках." };
+    const used = (await skipsUsed(db, date, date)).get(habitId) ?? 0;
+    if (used >= limit) return { ok: false, error: `Пропуски «${h.title}» на этот месяц закончились (${used} из ${limit}).` };
+    await run(
+      db,
+      `INSERT INTO habit_logs(habit_id, date, done, minutes, skipped, source, updated_at) VALUES (?, ?, 0, 0, 1, 'skip', ?)
+       ON CONFLICT(habit_id, date) DO UPDATE SET done = 0, skipped = 1, updated_at = excluded.updated_at`,
+      habitId,
+      date,
+      Date.now(),
+    );
+    await afterChange(db, date);
+    return { ok: true, left: limit - used - 1 };
+  }
+  await run(db, "UPDATE habit_logs SET skipped = 0, updated_at = ? WHERE habit_id = ? AND date = ?", Date.now(), habitId, date);
+  await afterChange(db, date);
+  return { ok: true };
 }
 
 export async function toggleHabit(db: D1Database, habitId: number, date: string, source: string): Promise<boolean | null> {
@@ -43,7 +69,8 @@ export async function addMinutes(
   await run(
     db,
     `INSERT INTO habit_logs(habit_id, date, done, minutes, source, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(habit_id, date) DO UPDATE SET done = excluded.done, minutes = excluded.minutes, source = excluded.source, updated_at = excluded.updated_at`,
+     ON CONFLICT(habit_id, date) DO UPDATE SET done = excluded.done, minutes = excluded.minutes, source = excluded.source, updated_at = excluded.updated_at,
+       skipped = CASE WHEN excluded.done = 1 THEN 0 ELSE skipped END`,
     habitId,
     date,
     done ? 1 : 0,

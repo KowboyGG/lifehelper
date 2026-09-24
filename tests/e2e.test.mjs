@@ -212,6 +212,51 @@ test("пропуск: осмысленный текст, лимит в неде�
   assert.equal(t.data.pass.usedToday, false);
 });
 
+test("свои пропуски привычки, паузы и перенос старта цели", async () => {
+  // зал: 1 свой пропуск в месяц
+  const gym = (await api("/api/habits", { method: "POST", body: { title: "Зал", type: "check", blocking: false, skips_per_month: 1, start_date: addDays(today, -3) } })).data.id;
+  let t = await api("/api/today");
+  const before = t.data.total;
+  assert.equal(t.data.habits.find((h) => h.id === gym).skips_left, 1);
+
+  assert.equal((await api(`/api/habits/${gym}/skip`, { method: "POST", body: { date: today } })).status, 200);
+  t = await api("/api/today");
+  assert.equal(t.data.total, before - 1, "пропущенная привычка не входит в план дня");
+  assert.equal(t.data.skipped, 1);
+  const again = await api(`/api/habits/${gym}/skip`, { method: "POST", body: { date: addDays(today, -1) } });
+  const sameMonth = addDays(today, -1).slice(0, 7) === today.slice(0, 7);
+  if (sameMonth) assert.equal(again.status, 400, "лимит пропусков на месяц");
+  // отметка «сделал» снимает пропуск
+  await api(`/api/habits/${gym}/toggle`, { method: "POST", body: { date: today, done: true } });
+  t = await api("/api/today");
+  assert.equal(t.data.habits.find((h) => h.id === gym).skipped, false);
+
+  // пауза (нет абонемента) — привычки в эти дни нет совсем
+  await api(`/api/habits/${gym}`, { method: "PUT", body: { pauses: [{ from: addDays(today, -3), to: addDays(today, 5), note: "нет абонемента" }] } });
+  t = await api("/api/today");
+  assert.ok(!t.data.habits.some((h) => h.id === gym));
+  await api(`/api/habits/${gym}`, { method: "DELETE" });
+
+  // старт цели сдвинули вперёд — привычка цели тоже начинается позже
+  const goalId = (await api("/api/goals")).data[0].id;
+  const g0 = (await api("/api/habits")).data.find((h) => h.id === mathId);
+  assert.equal(g0.start_date, addDays(today, -5));
+  await api(`/api/goals/${goalId}`, { method: "PUT", body: { start_date: addDays(today, -1) } });
+  const g1 = (await api("/api/habits")).data.find((h) => h.id === mathId);
+  assert.equal(g1.start_date, addDays(today, -1));
+  await api(`/api/goals/${goalId}`, { method: "PUT", body: { start_date: addDays(today, -5) } });
+  await api(`/api/habits/${mathId}`, { method: "PUT", body: { start_date: addDays(today, -5) } });
+
+  // цель без срока и без ежедневной нормы — шагами
+  const free = (await api("/api/goals", { method: "POST", body: { title: "Получить права" } })).data.id;
+  await api("/api/tasks", { method: "POST", body: { title: "Записаться в автошколу", goal_id: free } });
+  const fg = (await api("/api/goals")).data.find((x) => x.id === free);
+  assert.equal(fg.mode, "tasks");
+  assert.equal(fg.steps.length, 1);
+  assert.equal((await api("/api/tasks?view=inbox")).data.some((x) => x.goal_id === free), false, "шаги целей не засоряют «Входящие»");
+  await api(`/api/goals/${free}`, { method: "DELETE" });
+});
+
 test("бот: чек-лист с галочками и защита «Да» 20 секундами", async () => {
   tg.calls.length = 0;
   await message("/today");

@@ -4,10 +4,12 @@
 // Новая миграция: положи файл в migrations/ и добавь его в список ниже.
 import init from "../../migrations/0001_init.sql";
 import stickerPin from "../../migrations/0002_sticker_pin.sql";
+import habitSkips from "../../migrations/0003_habit_skips_pauses.sql";
 
 const MIGRATIONS: [name: string, sql: string][] = [
   ["0001_init.sql", init],
   ["0002_sticker_pin.sql", stickerPin],
+  ["0003_habit_skips_pauses.sql", habitSkips],
 ];
 
 let ready: Promise<void> | null = null;

@@ -2,7 +2,7 @@
 import type { Env } from "../env";
 import { approveLogin, createMagicCode } from "../api/auth";
 import { addTransaction, deleteTransaction, defaultAccount } from "../api/life";
-import { toggleHabit, undoPass, usePass } from "../lib/actions";
+import { skipHabit, toggleHabit, undoPass, usePass } from "../lib/actions";
 import { ensureDay, first, run } from "../lib/db";
 import { localToday, skipPreview } from "../lib/progress";
 import { getSettings, ownerId, publicUrl } from "../lib/settings";
@@ -256,7 +256,7 @@ async function handleCallback(env: Env, q: NonNullable<TgUpdate["callback_query"
     await run(db, "UPDATE days SET checkin_msg_id = ? WHERE date = ?", msg.message_id, date);
   };
 
-  if (["t", "m", "sk", "sy", "sn", "un", "cl", "op"].includes(op) && !isValidDate(a)) return void (await answerCallback(env, q.id));
+  if (["t", "m", "sk", "sy", "sn", "un", "cl", "op", "hs", "hu"].includes(op) && !isValidDate(a)) return void (await answerCallback(env, q.id));
 
   switch (op) {
     case "t": {
@@ -264,6 +264,14 @@ async function handleCallback(env: Env, q: NonNullable<TgUpdate["callback_query"
       const done = await toggleHabit(db, Number(b), a, "bot");
       await rerender(a);
       await answerCallback(env, q.id, done ? "✅ Отмечено" : "Снято");
+      return;
+    }
+    case "hs":
+    case "hu": {
+      const r = await skipHabit(db, Number(b), a, op === "hs");
+      if (!r.ok) return void (await answerCallback(env, q.id, r.error, true));
+      await rerender(a);
+      await answerCallback(env, q.id, op === "hs" ? `↷ Пропуск. Осталось в этом месяце: ${r.left}` : "Вернул в план");
       return;
     }
     case "m": {

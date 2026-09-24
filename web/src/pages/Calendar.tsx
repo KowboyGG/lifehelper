@@ -8,6 +8,7 @@ import { TaskLine } from "./Dashboard";
 
 interface CalDay {
   total: number;
+  skipped: number;
   done: number;
   pass: boolean;
   mood: number | null;
@@ -96,6 +97,7 @@ export function CalendarPage() {
             const c = data.days[d];
             const future = d > data.today;
             let s = "";
+            if (c && !c.total && c.skipped && !future) s = "s-pass";
             if (c && c.total) {
               if (future) s = "s-future";
               else if (c.done >= c.total) s = "s-full";
@@ -114,10 +116,11 @@ export function CalendarPage() {
                   <span>{Number(d.slice(8))}</span>
                   {c?.mood ? <span className="mood">{MOODS[c.mood - 1]}</span> : c?.hasNote ? <span className="faint">✎</span> : null}
                 </div>
-                {c && c.total > 0 && (
-                  <span className="score">
+                {c && (c.total > 0 || c.skipped > 0) && (
+                  <span className="score" title={c.skipped ? `Своих пропусков привычек: ${c.skipped}` : undefined}>
                     {c.pass && c.done < c.total ? "🎟 " : ""}
-                    {c.done}/{c.total}
+                    {c.total > 0 ? `${c.done}/${c.total}` : ""}
+                    {c.skipped ? `${c.total > 0 ? " " : ""}↷${c.skipped}` : ""}
                   </span>
                 )}
                 {c && c.tasks > 0 && (
@@ -163,7 +166,7 @@ export function DayPanel({ date, onClose }: { date: string; onClose: () => void 
   if (!data) return <Loading />;
   const future = date > data.today;
   const canPass = !future && diffDays(date, data.today) <= 1;
-  const pending = data.habits.filter((h) => !h.done).length;
+  const pending = data.habits.filter((h) => !h.done && !h.skipped).length;
 
   return (
     <div className="stack" style={{ gap: 18 }}>

@@ -23,7 +23,7 @@ async function state(db: D1Database) {
   const streak = await getStreak(db, s, today, summaryOf(today, habits, pass.usedToday));
   const enabled = s.block_enabled === "1";
   const inWindow = isBlockWindow(s, minutes);
-  const pending = habits.filter((h) => h.blocking && !h.done);
+  const pending = habits.filter((h) => h.blocking && !h.done && !h.skipped);
   return {
     date: today,
     time,

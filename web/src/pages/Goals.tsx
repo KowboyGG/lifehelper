@@ -56,7 +56,7 @@ function amountText(g: Goal) {
   if (g.mode === "minutes") return g.planned_total ? `${fmtMin(g.done_amount)} из ${fmtMin(g.planned_total)}` : `${fmtMin(g.done_amount)} всего`;
   if (g.mode === "days") return g.planned_total ? `${g.done_amount} из ${g.planned_total} дней` : `${g.done_amount} ${plural(g.done_amount, "день", "дня", "дней")}`;
   if (g.mode === "tasks") return `${g.tasks_done} из ${g.tasks_total} шагов`;
-  return "Привяжи привычку или задачи, чтобы считать прогресс";
+  return "Без ежедневной нормы — добавь шаги или просто отметь, когда достигнешь";
 }
 const fmtNum = (n: number) => n.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
 
@@ -116,6 +116,8 @@ function GoalCard({ g, onEdit, onAddHabit }: { g: Goal; onEdit: () => void; onAd
         </div>
       )}
 
+      {(g.mode === "tasks" || g.mode === "none" || (g.steps?.length ?? 0) > 0) && <GoalSteps g={g} />}
+
       <div className="divider" />
       <div className="row wrap" style={{ gap: 8 }}>
         {g.habits.map((h) => (
@@ -168,5 +170,39 @@ function GoalCard({ g, onEdit, onAddHabit }: { g: Goal; onEdit: () => void; onAd
         </div>
       )}
     </section>
+  );
+}
+
+function GoalSteps({ g }: { g: Goal }) {
+  const [title, setTitle] = useState("");
+  const add = async () => {
+    if (!title.trim()) return;
+    await mutate("/tasks", "POST", { title, goal_id: g.id });
+    setTitle("");
+  };
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div className="label" style={{ marginBottom: 6 }}>
+        Шаги
+      </div>
+      {(g.steps ?? []).map((t) => (
+        <div className={`task${t.done_at ? " done" : ""}`} key={t.id}>
+          <button className={`check sm${t.done_at ? " on" : ""}`} onClick={() => mutate(`/tasks/${t.id}`, "PUT", { done: !t.done_at })} aria-label="Отметить шаг">
+            <Icon name="check" size={14} stroke={2.6} />
+          </button>
+          <div className="t">
+            <div className="title">{t.title}</div>
+          </div>
+          <button className="btn ghost icon sm x" onClick={() => mutate(`/tasks/${t.id}`, "DELETE")} aria-label="Удалить шаг">
+            <Icon name="trash" size={15} />
+          </button>
+        </div>
+      ))}
+      {g.status === "active" && (
+        <div className="row" style={{ marginTop: 8 }}>
+          <input className="input sm" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} placeholder="Новый шаг и Enter…" />
+        </div>
+      )}
+    </div>
   );
 }

@@ -20,13 +20,16 @@ sql.push("DELETE FROM settings WHERE key = 'streak_cache';");
 const start = add(today, -75);
 ins("goals", { id: 1, title: "Выучить математику", emoji: "📐", why: "Хочу поступить на CS и перестать бояться формул. Через год я хочу решать задачи, а не пролистывать их.", start_date: add(today, -60), deadline: "2026-12-31", sort: 1, created_at: now });
 ins("goals", { id: 2, title: "Прочитать 12 книг", emoji: "📚", why: "Меньше ленты — больше мыслей.", start_date: "2026-01-01", deadline: "2026-12-31", target_value: 12, current_value: 7, unit: "книг", sort: 2, created_at: now });
+ins("goals", { id: 4, title: "Получить права", emoji: "🚗", why: "Свобода ездить куда хочу.", start_date: add(today, -20), sort: 4, created_at: now });
+for (const [i, t] of ["Выбрать автошколу", "Пройти медкомиссию", "Сдать теорию", "Сдать практику"].entries())
+  ins("tasks", { title: t, goal_id: 4, done_at: i < 2 ? now - (3 - i) * 86400000 : null, created_at: now + i });
 ins("goals", { id: 3, title: "Подушка безопасности", emoji: "🛟", why: "Спокойствие, если что-то пойдёт не так.", start_date: "2026-06-01", deadline: "2027-03-01", target_value: 60000, current_value: 21500, unit: "₴", sort: 3, created_at: now });
 
 const habits = [
   { id: 1, goal_id: 1, title: "Математика", emoji: "📐", type: "minutes", target_minutes: 60, days: "1111111", start_url: "https://www.khanacademy.org/math", focus_sites: '["khanacademy.org","youtube.com/@3blue1brown"]', blocking: 1, start_date: add(today, -60), p: 0.8 },
   { id: 2, goal_id: null, title: "Английский", emoji: "🇬🇧", type: "minutes", target_minutes: 20, days: "1111100", start_url: "https://www.duolingo.com", focus_sites: '["duolingo.com"]', blocking: 1, start_date: start, p: 0.85 },
   { id: 3, goal_id: null, title: "Чтение перед сном", emoji: "🌙", type: "check", target_minutes: null, days: "1111111", start_url: null, focus_sites: "[]", blocking: 0, start_date: start, p: 0.7 },
-  { id: 4, goal_id: null, title: "Спорт", emoji: "💪", type: "check", target_minutes: null, days: "1010100", start_url: null, focus_sites: "[]", blocking: 0, start_date: start, p: 0.75 },
+  { id: 4, goal_id: null, title: "Зал", emoji: "💪", type: "check", target_minutes: null, days: "1010100", start_url: null, focus_sites: "[]", blocking: 0, skips_per_month: 2, start_date: start, p: 0.75 },
 ];
 habits.forEach((h, i) => {
   const { p, ...row } = h;

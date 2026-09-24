@@ -10,7 +10,34 @@ export function HabitRow({ h, date, editable = true, onFocus }: { h: HabitDay; d
     if (r.done) toast(`${h.emoji ?? "✅"} ${h.title} — готово`);
   };
   const add = (m: number) => mutate(`/habits/${h.id}/minutes`, "POST", { date, add: m });
+  const skip = async (on: boolean) => {
+    if (on && !confirm(`Пропустить «${h.title}» ${fmtDate(date)}? В этом месяце останется пропусков: ${h.skips_left - 1}.`)) return;
+    await mutate(`/habits/${h.id}/skip`, "POST", { date, skip: on });
+    toast(on ? `↷ ${h.title}: пропуск` : `${h.title}: снова в плане`);
+  };
   const pct = h.type === "minutes" && h.target_minutes ? Math.min(1, h.minutes / h.target_minutes) : h.done ? 1 : 0;
+
+  if (h.skipped) {
+    return (
+      <div className="hrow dashed">
+        <div className="emoji">{h.emoji || "•"}</div>
+        <div className="body">
+          <div className="title" style={{ color: "var(--muted)" }}>
+            {h.title} <span className="pill blue">↷ пропуск</span>
+          </div>
+          <div className="meta">Свой пропуск привычки — стрик не страдает. Осталось в месяце: {h.skips_left}</div>
+        </div>
+        {editable && (
+          <div className="actions">
+            <button className="btn ghost sm" onClick={() => skip(false)}>
+              Вернуть
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={`hrow${h.done ? " done" : ""}`}>
       <div className="emoji">{h.emoji || "•"}</div>
@@ -43,6 +70,11 @@ export function HabitRow({ h, date, editable = true, onFocus }: { h: HabitDay; d
               </button>
             )}
           </>
+        )}
+        {editable && !h.done && h.skips_left > 0 && (
+          <button className="btn ghost xs" onClick={() => skip(true)} title={`Свои пропуски: осталось ${h.skips_left} в этом месяце`}>
+            ↷ {h.skips_left}
+          </button>
         )}
         {editable && (
           <button className={`check${h.done ? " on" : ""}`} onClick={toggle} aria-label={h.done ? "Снять отметку" : "Отметить"}>

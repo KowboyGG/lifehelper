@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LifeHelper — сначала дело",
   "short_name": "LifeHelper",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Не пускает на YouTube и TikTok, пока не сделано главное. Считает время на учёбу и отвлечения.",
   "permissions": ["storage", "alarms", "tabs", "notifications"],
   "host_permissions": ["<all_urls>"],
