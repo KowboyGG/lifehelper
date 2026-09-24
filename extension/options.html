@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LifeHelper — настройки</title>
+    <link rel="stylesheet" href="ui.css" />
+    <style>
+      body { display: grid; place-items: center; min-height: 100vh; padding: 24px; }
+      .wrap { width: min(520px, 100%); }
+      .card { padding: 28px; border-radius: 24px; }
+      label { display: block; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; font-weight: 800; color: var(--muted); margin: 18px 0 8px; }
+      .status { margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--card-2); font-size: 13.5px; }
+      .status.ok { background: var(--accent-soft); color: var(--accent); }
+      .status.err { background: rgba(240,122,122,.13); color: var(--danger); }
+      details { margin-top: 18px; color: var(--muted); }
+      summary { cursor: pointer; }
+      ol { color: var(--muted); padding-left: 18px; line-height: 1.6; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="brand" style="margin-bottom: 18px"><span class="mark">L</span><span>Life<b>Helper</b></span></div>
+      <div class="card">
+        <h1 style="font-size: 28px">Подключение</h1>
+        <p class="muted" style="margin: 6px 0 0">Расширение берёт привычки с твоего сайта и отправляет туда время фокуса.</p>
+
+        <label for="url">Адрес сайта</label>
+        <input id="url" placeholder="https://lifehelper.твой-ник.workers.dev" />
+
+        <div class="row" style="margin-top: 16px; flex-wrap: wrap">
+          <button class="primary" id="tg">Войти через Telegram</button>
+          <button id="test">Проверить связь</button>
+        </div>
+        <div id="status" class="status" hidden></div>
+
+        <details>
+          <summary>Или вставить токен вручную</summary>
+          <p>Создай токен на сайте: <b>Расширение → Создать</b>.</p>
+          <input id="token" placeholder="токен" />
+          <div style="margin-top: 10px"><button id="saveToken">Сохранить токен</button></div>
+        </details>
+
+        <details>
+          <summary>Как это работает</summary>
+          <ol>
+            <li>Пока «блокирующая» привычка не сделана — отвлекающие сайты закрыты экраном.</li>
+            <li>«Начать» ведёт на сайт для занятий и включает таймер. Если зайдёшь на такой сайт сам — таймер включится автоматически.</li>
+            <li>Считается только активное время: вкладка на экране, есть движение мыши/клавиатура/прокрутка или идёт видео.</li>
+            <li>Набрал норму — привычка отмечается сама, блок снимается.</li>
+          </ol>
+        </details>
+      </div>
+    </div>
+    <script src="options.js"></script>
+  </body>
+</html>

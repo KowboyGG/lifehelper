@@ -1,0 +1,140 @@
+/* Общие стили попапа и настроек расширения */
+:root {
+  --bg: #12151b;
+  --card: #1b1f27;
+  --card-2: #20252e;
+  --card-3: #262c36;
+  --line: rgba(255, 255, 255, 0.07);
+  --text: #eef0f3;
+  --muted: #8b93a1;
+  --accent: #4fc491;
+  --accent-ink: #0c261b;
+  --accent-soft: rgba(79, 196, 145, 0.13);
+  --danger: #f07a7a;
+  --warn: #f0b75e;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 Manrope, "Segoe UI", system-ui, sans-serif;
+}
+h1,
+h2 {
+  font-family: "Playfair Display", Georgia, serif;
+  margin: 0;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--card-2);
+  color: var(--text);
+  border-radius: 99px;
+  padding: 8px 14px;
+  font-weight: 700;
+  transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1), background 0.2s;
+}
+button:active {
+  transform: scale(0.97);
+}
+button.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+input {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--card-2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 11px 13px;
+  outline: none;
+}
+input:focus {
+  border-color: var(--accent);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font: 700 17px Georgia, "Playfair Display", serif;
+}
+.brand b {
+  color: var(--accent);
+  font-weight: 700;
+}
+.mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+}
+.muted {
+  color: var(--muted);
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px 16px;
+}
+.bar {
+  height: 7px;
+  border-radius: 99px;
+  background: var(--card-3);
+  overflow: hidden;
+}
+.bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.between {
+  justify-content: space-between;
+}
+.mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 800;
+  background: rgba(240, 183, 94, 0.14);
+  color: var(--warn);
+}
+.pill.green {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--muted);
+}

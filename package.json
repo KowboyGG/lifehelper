@@ -1,0 +1,33 @@
+{
+  "name": "lifehelper",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Личная система: цели, привычки, календарь, деньги, вишлист + Telegram-бот и Chrome-расширение",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "wrangler dev --port 8787",
+    "dev:web": "vite --config web/vite.config.ts",
+    "db:migrate:local": "wrangler d1 migrations apply lifehelper --local",
+    "db:migrate:remote": "wrangler d1 migrations apply lifehelper --remote",
+    "build": "vite build --config web/vite.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
+    "test": "node --test --test-concurrency=1 tests/e2e.test.mjs",
+    "deploy": "npm run build && bash scripts/deploy.sh",
+    "bot:poll": "node scripts/bot-poll.mjs"
+  },
+  "dependencies": {
+    "hono": "^4.13.9",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260924.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.1",
+    "wrangler": "^4.138.0"
+  }
+}

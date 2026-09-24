@@ -1,0 +1,6 @@
+# Скопируй в .dev.vars для локальной разработки (файл не попадает в git)
+# Вход без Telegram на localhost (НЕ ставь это в продакшене)
+DEV_LOGIN=1
+# Токен бота от @BotFather — чтобы проверить бота локально через `npm run bot:poll`
+# TELEGRAM_BOT_TOKEN=123456:ABC...
+# OWNER_TELEGRAM_ID=123456789
