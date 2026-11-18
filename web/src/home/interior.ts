@@ -30,6 +30,8 @@ export interface Anchors {
   calendar: THREE.Mesh;
   /** электронные часы */
   clock: THREE.Mesh;
+  /** соотношение сторон экрана монитора */
+  monitorAspect?: number;
 }
 
 /** Прямоугольный источник: pos — центр, dir — куда светит, along — вдоль ширины */
@@ -64,6 +66,11 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
     const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 4, rad), mat);
     m.position.set(x, y + h / 2, z);
     return add(m, parent);
+  };
+  /** Метка «процедурной заглушки»: прячется, когда загрузится модель */
+  const tag = <T extends THREE.Object3D>(o: T, t: string) => {
+    o.userData.proc = t;
+    return o;
   };
   const shadow = (w: number, d: number, x: number, z: number, o = 0.7) => {
     const s = contactShadow(w, d, o);
@@ -115,7 +122,7 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   const columnMat = std({ map: columnTex, roughness: 0.9 });
   const steel = std({ color: "#0b0b0d", roughness: 0.42, metalness: 0.7 });
   const blackMatte = std({ color: "#0f0f11", roughness: 0.62, metalness: 0.05 });
-  const stoneDark = std({ map: stoneTexture("counter", true), roughness: 0.32, metalness: 0, envMapIntensity: 0.6 });
+  const stoneDark = phys({ map: stoneTexture("counter", true), roughness: 0.42, metalness: 0, envMapIntensity: 0.5, specularIntensity: 0.35 });
   const walnut = std({ map: wood.color, color: "#bba08a", roughness: 0.38 });
   const fabric = phys({
     map: fabricTexture("boucle", [150, 140, 128], 1.4),
@@ -250,13 +257,13 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   add(underCab);
   secondaryLights.push(underCab);
   // мойка и смеситель
-  box(0.42, 0.005, 0.6, std({ color: "#060607", roughness: 0.3, metalness: 0.4 }), x0 + 0.34, 0.912, -0.9);
+  tag(box(0.42, 0.005, 0.6, std({ color: "#060607", roughness: 0.3, metalness: 0.4 }), x0 + 0.34, 0.912, -0.9), "sink");
   const faucet = new THREE.Mesh(
     new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.3, 0), new THREE.Vector3(0.12, 0.36, 0), new THREE.Vector3(0.2, 0.28, 0)]), 16, 0.012, 8),
     steel,
   );
   faucet.position.set(x0 + 0.1, 0.91, -0.9);
-  add(faucet);
+  add(tag(faucet, "sink"));
   // варочная панель
   box(0.52, 0.006, 0.6, std({ color: "#050506", roughness: 0.08, metalness: 0 }), x0 + 0.34, 0.912, 0.5);
   // кофемашина
@@ -272,9 +279,9 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   const fx = x0 + 0.76; // плоскость фасада
   const fridge = new THREE.Group();
   add(fridge);
-  box(0.74, 1.84, fW, std({ color: "#1b1c1f", roughness: 0.5, metalness: 0.6 }), x0 + 0.38, 0.02, fMid, fridge);
+  tag(box(0.74, 1.84, fW, std({ color: "#1b1c1f", roughness: 0.5, metalness: 0.6 }), x0 + 0.38, 0.02, fMid, fridge), "fridge");
   const door = (z: number, w: number, y: number, h: number) => {
-    const d = rbox(0.04, h, w, 0.012, fridgeSteel, fx - 0.02, y, z, fridge);
+    const d = tag(rbox(0.04, h, w, 0.012, fridgeSteel, fx - 0.02, y, z, fridge), "fridge");
     return d;
   };
   door(fz0 + fW * 0.25, fW / 2 - 0.006, 0.76, 1.08);
@@ -284,16 +291,16 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   for (const dz of [-0.05, 0.05]) {
     const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.72, 10), steel);
     handle.position.set(fx + 0.04, 1.3, fMid + dz);
-    add(handle, fridge);
-    for (const hy of [0.98, 1.62]) box(0.04, 0.02, 0.02, steel, fx + 0.02, hy - 0.01, fMid + dz, fridge);
+    add(tag(handle, "fridge"), fridge);
+    for (const hy of [0.98, 1.62]) tag(box(0.04, 0.02, 0.02, steel, fx + 0.02, hy - 0.01, fMid + dz, fridge), "fridge");
   }
   const fridgeBar = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.5, 10), steel);
   fridgeBar.rotation.x = Math.PI / 2;
   fridgeBar.position.set(fx + 0.04, 0.64, fMid);
-  add(fridgeBar, fridge);
+  add(tag(fridgeBar, "fridge"), fridge);
   // боковая панель-пенал
   box(0.76, soffitY, 0.03, blackMatte, x0 + 0.38, 0, fz1 + 0.015);
-  box(0.76, soffitY - 1.9, fW + 0.03, blackMatte, x0 + 0.38, 1.9, fMid);
+  const fridgeTop = box(0.76, soffitY - 1.9, fW + 0.03, blackMatte, x0 + 0.38, 1.9, fMid);
   const fridgeFront = new THREE.Group();
   fridgeFront.position.set(fx + 0.002, 1.3, fMid);
   fridgeFront.rotation.y = Math.PI / 2;
@@ -316,18 +323,18 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
     const sx = ix1 + 0.55;
     const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.17, 0.07, 28), leather);
     seat.position.set(sx, 0.7, sz);
-    add(seat);
+    add(tag(seat, "stools"));
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.66, 10), steel);
     post.position.set(sx, 0.34, sz);
-    add(post);
+    add(tag(post, "stools"));
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.008, 6, 24), steel);
     ring.rotation.x = Math.PI / 2;
     ring.position.set(sx, 0.26, sz);
-    add(ring);
+    add(tag(ring, "stools"));
     const base = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.21, 0.02, 28), steel);
     base.position.set(sx, 0.01, sz);
-    add(base);
-    shadow(0.6, 0.6, sx, sz, 0.5);
+    add(tag(base, "stools"));
+    tag(shadow(0.6, 0.6, sx, sz, 0.5), "stools");
   }
   // свеча на острове
   const candleGlass = new THREE.Mesh(
@@ -349,7 +356,7 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
     phys({ color: "#0d1a10", roughness: 0.12, metalness: 0.1, clearcoat: 1 }),
   );
   bottle.position.set(iMid + 0.25, 0.93, 0.35);
-  add(bottle);
+  add(tag(bottle, "islandBottle"));
   const glassMat = phys({ color: "#cfd6e0", roughness: 0.05, transparent: true, opacity: 0.25, metalness: 0, side: THREE.DoubleSide });
   for (const gz of [0.6, 0.72]) {
     const wg = new THREE.Mesh(
@@ -357,7 +364,7 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
       glassMat,
     );
     wg.position.set(iMid + 0.05 + (gz - 0.6), 0.93, gz);
-    add(wg);
+    add(tag(wg, "islandBottle"));
   }
   // подвесной светильник-барабан (еле тлеет)
   const shadeMat = std({ color: "#3a332c", roughness: 0.9, side: THREE.DoubleSide, emissive: new THREE.Color("#ff8a40"), emissiveIntensity: 0.05 });
@@ -367,11 +374,11 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, H - 2.42, 6), steel);
   cord.position.set(iMid, (H + 2.42) / 2, 0);
   add(cord);
-  const diffuser = new THREE.Mesh(new THREE.CircleGeometry(0.36, 40), glow("#ff9a50", 0.9));
+  const diffuser = new THREE.Mesh(new THREE.CircleGeometry(0.36, 40), glow("#ff9a50", 0.45));
   diffuser.rotation.x = Math.PI / 2;
   diffuser.position.set(iMid, 2.1, 0);
   add(diffuser);
-  const pendant = new THREE.PointLight("#ff9a55", 0.35, 3.5, 2);
+  const pendant = new THREE.PointLight("#ff9a55", 0.12, 3.5, 2);
   pendant.position.set(iMid, 2.15, 0);
   add(pendant);
 
@@ -487,7 +494,7 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   [lampBase, stem, dome].forEach((m) => (m.castShadow = true));
   // книги
   const books = new THREE.Group();
-  books.position.set(tx - 0.28, tableH, tz + 0.12);
+  books.position.set(tx - 0.24, tableH, tz - 0.28);
   books.rotation.y = 0.35;
   add(books);
   [
@@ -577,27 +584,27 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   // монитор
   const monitor = new THREE.Group();
   add(monitor, desk);
-  rbox(0.035, 0.4, 0.9, 0.008, std({ color: "#0a0a0b", roughness: 0.4, metalness: 0.3 }), dx + 0.18, 1.0, dz, monitor);
+  tag(rbox(0.035, 0.4, 0.9, 0.008, std({ color: "#0a0a0b", roughness: 0.4, metalness: 0.3 }), dx + 0.18, 1.0, dz, monitor), "deskset");
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.87, 0.37), new THREE.MeshBasicMaterial({ color: "#ffffff" }));
   screen.position.set(dx + 0.161, 1.2, dz);
   screen.rotation.y = -Math.PI / 2;
   add(screen, monitor);
-  box(0.03, 0.28, 0.05, steel, dx + 0.22, 0.755, dz, monitor);
-  box(0.2, 0.012, 0.28, steel, dx + 0.18, 0.755, dz, monitor);
+  tag(box(0.03, 0.28, 0.05, steel, dx + 0.22, 0.755, dz, monitor), "deskset");
+  tag(box(0.2, 0.012, 0.28, steel, dx + 0.18, 0.755, dz, monitor), "deskset");
   // подсветка за монитором — светит в стекло
   box(0.01, 0.01, 0.8, ledMat(false), dx + 0.2, 1.2, dz, monitor);
   const screenLight = rectLight("#cfe0ff", 1.2, 0.85, 0.36, new THREE.Vector3(dx + 0.15, 1.2, dz), new THREE.Vector3(-1, -0.2, 0), new THREE.Vector3(0, 0, 1));
   add(screenLight);
   interactive.set("monitor", monitor);
   // клавиатура, мышь, кружка, суккулент
-  rbox(0.13, 0.02, 0.44, 0.006, std({ color: "#1a1a1c", roughness: 0.6 }), dx - 0.12, 0.755, dz, desk);
-  rbox(0.1, 0.025, 0.06, 0.02, std({ color: "#1a1a1c", roughness: 0.4 }), dx - 0.14, 0.755, dz - 0.34, desk);
+  tag(rbox(0.13, 0.02, 0.44, 0.006, std({ color: "#1a1a1c", roughness: 0.6 }), dx - 0.12, 0.755, dz, desk), "deskset");
+  tag(rbox(0.1, 0.025, 0.06, 0.02, std({ color: "#1a1a1c", roughness: 0.4 }), dx - 0.14, 0.755, dz - 0.34, desk), "deskset");
   const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.036, 0.095, 24), std({ color: "#e9e4dc", roughness: 0.35 }));
   mug.position.set(dx - 0.1, 0.755 + 0.048, dz + 0.55);
-  add(mug, desk);
+  add(tag(mug, "deskset"), desk);
   const succ = smallPlant(4);
   succ.position.set(dx + 0.15, 0.755, dz - 0.72);
-  add(succ, desk);
+  add(tag(succ, "deskset"), desk);
   // подсветка под столом
   box(0.012, 0.01, 1.6, ledMat(false), dx - 0.3, 0.715, dz);
   const deskGlow = rectLight("#ffffff", 1, 0.5, 1.6, new THREE.Vector3(dx, 0.71, dz), new THREE.Vector3(-0.1, -1, 0), new THREE.Vector3(1, 0, 0));
@@ -607,7 +614,7 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   const chair = new THREE.Group();
   chair.position.set(dx - 0.8, 0, dz + 0.05);
   chair.rotation.y = -Math.PI / 2 + 0.2;
-  add(chair);
+  add(tag(chair, "chair"));
   const chairMat = std({ color: "#121214", roughness: 0.7 });
   rbox(0.5, 0.08, 0.5, 0.03, chairMat, 0, 0.46, 0, chair);
   const back = rbox(0.46, 0.6, 0.06, 0.03, chairMat, 0, 0.58, 0.25, chair);
@@ -641,11 +648,6 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   const label = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.005, 24), std({ color: "#b0332a", roughness: 0.6 }));
   label.position.set(x1 - 0.25, 0.706, conMid - 0.37);
   add(label, con);
-  // пластинки, прислонённые к стене
-  for (let i = 0; i < 4; i++) {
-    const rec = box(0.31, 0.31, 0.006, std({ color: ["#2a2a2e", "#6a3a28", "#1e3040", "#d8d0c0"][i], roughness: 0.8 }), x1 - 0.12 - i * 0.012, 0.62, conMid + 0.35, con);
-    rec.rotation.set(0, Math.PI / 2, -0.12 - i * 0.03);
-  }
   // подсветка под комодом
   box(0.012, 0.01, conZ1 - conZ0 - 0.1, ledMat(false), x1 - 0.46, 0.115, conMid);
   shadow(0.9, 1.9, x1 - 0.25, conMid, 0.6);
@@ -673,15 +675,15 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   );
   art.position.set(x1 - 0.015, 1.55, conMid);
   art.rotation.y = -Math.PI / 2;
-  add(art);
-  box(0.02, 0.69, 0.99, std({ color: "#0b0b0c", roughness: 0.5 }), x1 - 0.012, 1.55 - 0.345, conMid);
+  add(tag(art, "art"));
+  tag(box(0.02, 0.69, 0.99, std({ color: "#0b0b0c", roughness: 0.5 }), x1 - 0.012, 1.55 - 0.345, conMid), "art");
   art.position.x = x1 - 0.024;
   // подсветка картины
-  box(0.06, 0.02, 0.5, brass, x1 - 0.06, 1.92, conMid);
+  tag(box(0.06, 0.02, 0.5, brass, x1 - 0.06, 1.92, conMid), "art");
   const artLight = new THREE.SpotLight("#ffd2a0", 1.2, 1.6, 0.9, 0.8, 2);
   artLight.position.set(x1 - 0.1, 1.9, conMid);
   artLight.target.position.set(x1, 1.4, conMid);
-  add(artLight);
+  add(tag(artLight, "art"));
   add(artLight.target);
 
   // сейф
@@ -702,7 +704,7 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   box(sd - 0.08, 0.015, sw - 0.1, shelfMat, 0.02, 0.38, 0, safe);
   box(sd - 0.08, 0.015, sw - 0.1, shelfMat, 0.02, 0.05, 0, safe);
   // тёплый свет внутри
-  const safeLight = new THREE.PointLight("#ffb070", 0.35, 1.2, 2);
+  const safeLight = new THREE.PointLight("#ffb070", 0.9, 1.4, 2);
   safeLight.position.set(0.0, sh - 0.12, 0);
   add(safeLight, safe);
   box(0.3, 0.01, 0.01, glow("#ffc890", 4), 0.05, sh - 0.06, 0, safe);
@@ -739,6 +741,9 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
     glassMeshes,
     interactive,
     anchors: { fridgeFront, tableTop, safeInside, monitorScreen: screen, calendar, clock } as Anchors,
+    groups: { fridge, monitor, desk, fridgeTop },
+    spots: { kitchen: { x0, kz0, kz1, fz0, fz1, fMid, soffitY, counterY: 0.91, ix0, ix1, iMid }, desk: { dx, dz }, console: { conMid, conZ0, conZ1 } },
+    tag,
     lights: { candle, cityN, cityE, hemi, tableLamp, arcLight, pendant, screenLight, safeLight, flame },
     led: { primary: ledPrimary, secondary: ledSecondary, primaryLights, secondaryLights },
   };
