@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Сцена «Дом» — отладка</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      #wrap { position: fixed; inset: 0; }
+      canvas { display: block; width: 100%; height: 100%; }
+      #fps { position: fixed; left: 8px; top: 8px; color: #8f8; font: 12px monospace; z-index: 2; }
+    </style>
+  </head>
+  <body>
+    <div id="wrap"><canvas id="c"></canvas></div>
+    <div id="fps"></div>
+    <script type="module" src="/src/home/dev.ts"></script>
+  </body>
+</html>
