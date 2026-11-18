@@ -415,6 +415,104 @@ void main() {
 }
 `;
 
+// ------------------------------------------------------------------ дома-модели (Sketchfab)
+
+/** Где стоят дома-модели: x, z, поворот, имя узла в ките, радиус «расчистки» */
+export const CITY_SLOTS: { x: number; z: number; rot: number; item: string; r: number }[] = [
+  { x: -60, z: -250, rot: 0, item: "b23", r: 45 },
+  { x: -270, z: -330, rot: Math.PI / 2, item: "b21", r: 40 },
+  { x: -430, z: -520, rot: 0, item: "b25", r: 60 },
+  { x: 40, z: -730, rot: Math.PI, item: "b18", r: 45 },
+  { x: -190, z: -830, rot: 0, item: "b20", r: 40 },
+  { x: 340, z: -640, rot: Math.PI / 2, item: "b0", r: 35 },
+  { x: -530, z: -270, rot: 0, item: "b19", r: 45 },
+  { x: 300, z: 130, rot: Math.PI / 2, item: "b24", r: 55 },
+  { x: 250, z: -30, rot: 0, item: "b17", r: 35 },
+  { x: 430, z: -190, rot: -Math.PI / 2, item: "b6", r: 45 },
+  { x: 480, z: 40, rot: 0, item: "b2", r: 40 },
+  { x: 570, z: -340, rot: Math.PI, item: "b8", r: 40 },
+  { x: 390, z: 300, rot: 0, item: "b13", r: 45 },
+  { x: 660, z: 160, rot: Math.PI / 2, item: "b12", r: 30 },
+  { x: -120, z: -480, rot: Math.PI / 2, item: "b3", r: 35 },
+  { x: -360, z: -700, rot: 0, item: "b7", r: 40 },
+  { x: 700, z: -60, rot: 0, item: "b11", r: 45 },
+];
+export const SKYLINE_SLOT = { x: -760, z: -1350, rot: 0.3, scale: 2.4, r: 300 };
+
+const BUILDING_FS = /* glsl */ `
+uniform sampler2D map;
+uniform vec3 uColor;
+uniform float uHasMap;
+varying vec2 vUv;
+varying vec3 vWorld;
+${GLSL_NOISE}
+${FOG_GLSL}
+void main() {
+  vec3 c = uHasMap > 0.5 ? texture2D(map, vUv).rgb * uColor : uColor;
+  // ночь: стены гасим, светящиеся окна раскаляем
+  float m = max(c.r, max(c.g, c.b));
+  float win = smoothstep(0.16, 0.55, m);
+  vec3 col = c * mix(0.32, 3.2, win);
+  col = applyFog(col, vWorld);
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+const BUILDING_VS = /* glsl */ `
+varying vec2 vUv;
+varying vec3 vWorld;
+void main() {
+  vUv = uv;
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vWorld = wp.xyz;
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}
+`;
+
+/** Перекрасить загруженные дома в «ночной» шейдер с нашим туманом и расставить */
+export function placeCityModels(scene: THREE.Scene, U: OutsideUniforms, kit: THREE.Object3D | null, skyline: THREE.Object3D | null) {
+  const toNight = (root: THREE.Object3D) =>
+    root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const src = m.material as THREE.MeshStandardMaterial;
+      m.material = new THREE.ShaderMaterial({
+        vertexShader: BUILDING_VS,
+        fragmentShader: BUILDING_FS,
+        uniforms: { ...U, map: { value: src.map ?? null }, uHasMap: { value: src.map ? 1 : 0 }, uColor: { value: (src.color ?? new THREE.Color(1, 1, 1)).clone() } },
+      });
+      src.dispose();
+    });
+  if (kit) {
+    for (const slot of CITY_SLOTS) {
+      const item = kit.getObjectByName("item_" + slot.item);
+      if (!item) continue;
+      const g = new THREE.Group();
+      const c = item.clone(true);
+      c.position.set(0, 0, 0);
+      g.add(c);
+      g.position.set(slot.x, STREET_Y, slot.z);
+      g.rotation.y = slot.rot;
+      toNight(g);
+      scene.add(g);
+    }
+  }
+  if (skyline) {
+    const item = skyline.getObjectByName("item_skyline") ?? skyline;
+    const g = new THREE.Group();
+    const c = item.clone(true);
+    c.position.set(0, 0, 0);
+    g.add(c);
+    g.position.set(SKYLINE_SLOT.x, STREET_Y, SKYLINE_SLOT.z);
+    g.rotation.y = SKYLINE_SLOT.rot;
+    g.scale.setScalar(SKYLINE_SLOT.scale);
+    toNight(g);
+    scene.add(g);
+  }
+}
+
+const reserved = (x: number, z: number, half: number) =>
+  CITY_SLOTS.some((s) => Math.hypot(x - s.x, z - s.z) < s.r + half + 8) || Math.hypot(x - SKYLINE_SLOT.x, z - SKYLINE_SLOT.z) < SKYLINE_SLOT.r + half;
+
 // ------------------------------------------------------------------ сборка
 
 interface TowerSpec {
@@ -441,12 +539,8 @@ export function buildOutside(U: OutsideUniforms) {
 
   // Наш дом — в квартале с центром в (0,0); рядом — пара «героев»
   const hero: TowerSpec[] = [
-    // тёплая офисная башня прямо на севере (как на фото с окнами)
-    { x: -60, z: -250, w: 44, d: 38, h: 330, rot: 0, type: 0, lit: 0.6, crown: 1, seed: 0.11 },
     // стеклянная со светодиодами на северо-востоке
     { x: 210, z: -340, w: 40, d: 40, h: 300, rot: 0.3, type: 2, lit: 0.4, crown: 3, seed: 0.23 },
-    // жилая башня на востоке
-    { x: 250, z: -30, w: 36, d: 30, h: 210, rot: 0, type: 1, lit: 0.34, crown: 0, seed: 0.37 },
     // очень высокая со шпилем вдали (зелёная корона)
     { x: 760, z: -1250, w: 52, d: 52, h: 420, rot: 0.0, type: 0, lit: 0.45, crown: 2, seed: 0.51 },
     // ещё одна стеклянная вдали на востоке
@@ -482,6 +576,7 @@ export function buildOutside(U: OutsideUniforms) {
         const h = hBase + tall * r.range(60, 330) * (r.chance(0.65) ? 1 : 0.4);
         const typeRoll = r.next();
         const type = typeRoll < 0.46 ? 0 : typeRoll < 0.84 ? 1 : typeRoll < 0.9 ? 2 : 3;
+        if (reserved(cx + ox, cz + oz, Math.max(w, d) / 2)) continue;
         const t: TowerSpec = {
           x: cx + ox,
           z: cz + oz,
@@ -507,9 +602,12 @@ export function buildOutside(U: OutsideUniforms) {
         for (let i = 0; i < m; i++) {
           const w = r.range(10, 26);
           const d = r.range(10, 26);
+          const lx = cx + r.range(-(inner - w) / 2, (inner - w) / 2);
+          const lz = cz + r.range(-(inner - d) / 2, (inner - d) / 2);
+          if (reserved(lx, lz, Math.max(w, d) / 2)) continue;
           towers.push({
-            x: cx + r.range(-(inner - w) / 2, (inner - w) / 2),
-            z: cz + r.range(-(inner - d) / 2, (inner - d) / 2),
+            x: lx,
+            z: lz,
             w,
             d,
             h: r.range(8, 34) + (r.chance(0.2) ? r.range(10, 40) : 0),
@@ -564,7 +662,7 @@ export function buildOutside(U: OutsideUniforms) {
   scene.add(towerMesh);
 
   // шпили на героях
-  for (const t of [hero[3], hero[1], hero[4]]) {
+  for (const t of [hero[1], hero[0], hero[2]]) {
     const sp = new THREE.Mesh(
       new THREE.CylinderGeometry(0.4, 2.2, 70, 6),
       new THREE.MeshBasicMaterial({ color: new THREE.Color(0.02, 0.022, 0.03) }),
@@ -745,6 +843,9 @@ export function buildOutside(U: OutsideUniforms) {
 
   return {
     scene,
+    addModels(kit: THREE.Object3D | null, skyline: THREE.Object3D | null) {
+      placeCityModels(scene, U, kit, skyline);
+    },
     setPixelScale(px: number) {
       pointsMat.uniforms.uPx.value = px;
     },

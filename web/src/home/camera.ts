@@ -23,11 +23,11 @@ export const ZONES: Zone[] = [
 ];
 
 export const FOCUS: Record<Interactive, Shot> = {
-  fridge: { pos: [-3.7, 1.38, 1.85], look: [-5.3, 1.28, 1.85], fov: 52 },
+  fridge: { pos: [-3.95, 1.4, 1.85], look: [-5.3, 1.32, 1.85], fov: 55 },
   money: { pos: [-0.05, 1.22, -0.3], look: [-0.05, 0.4, -1.32], fov: 50 },
   safe: { pos: [4.25, 1.05, 2.7], look: [5.7, 0.38, 3.35], fov: 50 },
   monitor: { pos: [4.35, 1.3, -0.95], look: [5.56, 1.18, -0.95], fov: 50 },
-  calendar: { pos: [2.05, 1.5, -0.95], look: [2.86, 1.45, -0.95], fov: 50 },
+  calendar: { pos: [1.95, 1.42, -0.95], look: [2.86, 1.38, -0.95], fov: 55 },
   window: { pos: [0.4, 1.6, -3.0], look: [1.6, 1.25, -12], fov: 55 },
 };
 

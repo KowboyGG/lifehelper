@@ -45,6 +45,10 @@ const P: Record<string, string> = {
   alert: "M12 3.5l9.5 16.5h-19zM12 10v4.5M12 17.5v.1",
   focus: "M4 8.5V4h4.5M15.5 4H20v4.5M20 15.5V20h-4.5M8.5 20H4v-4.5M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   cursor: "M5 3.5l13 6.5-5.5 1.5L10.5 17z",
+  home: "M3.5 11L12 4l8.5 7M6 9.5V20h12V9.5M10 20v-5.5h4V20",
+  rain: "M7 15.5a4.5 4.5 0 1 1 1-8.9A5.5 5.5 0 0 1 18.5 9a3.5 3.5 0 0 1-.5 6.5M8 18.5l-1 2M12 17.5l-1 2.5M16 18.5l-1 2",
+  fog: "M7 13a4.5 4.5 0 1 1 1-8.9A5.5 5.5 0 0 1 18.5 6.5a3.5 3.5 0 0 1 .5 6.5M4 16.5h16M6 20h12",
+  bulb: "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z",
 };
 
 export function Icon({ name, size = 20, className, stroke = 1.6 }: { name: keyof typeof P | string; size?: number; className?: string; stroke?: number }) {

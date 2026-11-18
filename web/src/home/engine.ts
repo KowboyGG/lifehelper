@@ -13,6 +13,8 @@ import { CameraRig, FOCUS, ZONES, type Shot } from "./camera";
 import { makeGlassUniforms } from "./glass";
 import { buildInterior, type Interactive, type Interior } from "./interior";
 import { buildOutside, makeOutsideUniforms } from "./outside";
+import { furnishDesk, furnishKitchen, furnishNeon, loadKit } from "./models";
+import { Props, loadFonts, type HomeData } from "./props";
 import { damp } from "./util";
 
 export const LED_PALETTES = {
@@ -209,11 +211,11 @@ export class HomeEngine {
     this.interior = buildInterior(this.G, this.refl);
     this.interior.scene.environmentIntensity = 0.35;
 
-    this.interior.interactive.forEach((obj, key) => {
-      this.pickables.push(obj);
-      obj.traverse((o) => this.keyOf.set(o, key));
-    });
+    this.interior.interactive.forEach((obj) => this.pickables.push(obj));
+    this.refreshPickables();
 
+    this.props = new Props(this.interior);
+    void loadFonts().then(() => this.props.refresh());
     this.setupPost();
     this.setLed("neon");
     this.resize();
@@ -221,6 +223,32 @@ export class HomeEngine {
   }
 
   // ------------------------------------------------------------------ публичное API
+
+  /** Догрузить модели (мебель, декор, дома за окном). Сцена работает и без них. */
+  async loadModels(base = "/models/") {
+    const [kitchen, desk, neon, city1, city2] = await Promise.all(["kitchen", "desk", "neon", "city1", "city2"].map((n) => loadKit(n, base)));
+    if (this.disposed) return;
+    if (kitchen) furnishKitchen(this.interior, kitchen);
+    if (desk) furnishDesk(this.interior, desk);
+    if (neon) furnishNeon(this.interior, neon);
+    this.outside.addModels(city1, city2);
+    this.refreshPickables();
+    this.modelsLoaded = true;
+    this.onModels?.();
+  }
+  modelsLoaded = false;
+  readonly props: Props;
+
+  setData(d: HomeData) {
+    this.props.setData(d);
+  }
+  onModels: (() => void) | null = null;
+  private disposed = false;
+
+  private refreshPickables() {
+    this.keyOf = new WeakMap();
+    this.interior.interactive.forEach((obj, key) => obj.traverse((o) => this.keyOf.set(o, key)));
+  }
 
   start() {
     if (this.running) return;
@@ -274,6 +302,7 @@ export class HomeEngine {
       l.intensity = 5 * lvl;
     });
     this.G.uTint.value.copy(a).lerp(b, 0.3).multiplyScalar(p === "off" ? 0 : 1);
+    this.props?.setLedColor(p === "off" ? "#ff3b30" : "#" + a.clone().lerp(new THREE.Color("#ffffff"), 0.35).getHexString());
     this.rebuildEnv(a, b);
   }
   get ledPalette() {
@@ -294,8 +323,11 @@ export class HomeEngine {
     return this.zone;
   }
 
-  focus(key: Interactive) {
+  /** Подлететь к предмету. Карточка справа (компьютер) или снизу (телефон) — сдвигаем кадр, чтобы предмет не прятался под ней */
+  focus(key: Interactive, panel: "right" | "bottom" | null = null) {
     this.rig.setShot(FOCUS[key]);
+    if (panel === "right") this.rig.tYaw -= 0.2;
+    if (panel === "bottom") this.rig.tPitch -= 0.2;
   }
   shot(s: Shot, instant = false) {
     this.rig.setShot(s, instant);
@@ -334,6 +366,7 @@ export class HomeEngine {
   }
 
   dispose() {
+    this.disposed = true;
     this.stop();
     this.disposers.forEach((d) => d());
     this.rtOut.dispose();
@@ -455,6 +488,7 @@ export class HomeEngine {
     L.flame.scale.set(1, 2.2 * (0.9 + 0.1 * fl), 1);
 
     this.rig.update(dt);
+    this.props.tick();
     this.onFrame?.(dt, t);
     this.final.uniforms.uTime.value = t;
   }

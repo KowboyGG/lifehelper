@@ -3,6 +3,7 @@ import { initials, navigate, plural, useApi, useLocation, type Me } from "./lib"
 import { Icon } from "./ui/icons";
 import { Toasts } from "./ui/kit";
 import { Dashboard } from "./pages/Dashboard";
+import { HomePage } from "./pages/Home";
 import { CalendarPage } from "./pages/Calendar";
 import { GoalsPage } from "./pages/Goals";
 import { HabitsPage } from "./pages/Habits";
@@ -24,7 +25,8 @@ const NAV: { section: string; items: { path: string; label: string; icon: string
   {
     section: "Основное",
     items: [
-      { path: "/", label: "Сегодня", icon: "today" },
+      { path: "/", label: "Дом", icon: "home" },
+      { path: "/today", label: "Сегодня", icon: "today" },
       { path: "/calendar", label: "Календарь", icon: "calendar" },
       { path: "/goals", label: "Цели", icon: "target" },
       { path: "/habits", label: "Привычки", icon: "repeat" },
@@ -49,7 +51,8 @@ const NAV: { section: string; items: { path: string; label: string; icon: string
 ];
 
 const PAGES: Record<string, () => ReactNode> = {
-  "/": () => <Dashboard />,
+  "/": () => <HomePage />,
+  "/today": () => <Dashboard />,
   "/calendar": () => <CalendarPage />,
   "/goals": () => <GoalsPage />,
   "/habits": () => <HabitsPage />,
@@ -80,6 +83,8 @@ function Shell({ path }: { path: string }) {
   const [open, setOpen] = useState(false);
   useEffect(() => setOpen(false), [path]);
   const page = PAGES[path] ?? PAGES["/"];
+  // «Дом» — сцена на весь экран, меню выезжает поверх
+  const immersive = !PAGES[path] || path === "/";
   const left = me.data ? me.data.total - me.data.done : 0;
 
   const NavItem = ({ p, label, icon, badge }: { p: string; label: string; icon: string; badge?: ReactNode }) => (
@@ -99,7 +104,7 @@ function Shell({ path }: { path: string }) {
 
   return (
     <MeCtx.Provider value={me.data}>
-      <div className="app">
+      <div className={`app${immersive ? " immersive" : ""}`}>
         <aside className={`sidebar${open ? " open" : ""}`}>
           <a
             href="/"
@@ -123,7 +128,7 @@ function Shell({ path }: { path: string }) {
                   p={it.path}
                   label={it.label}
                   icon={it.icon}
-                  badge={it.path === "/" && me.data && left > 0 && !me.data.passUsed ? <span className="nav-badge">{left}</span> : undefined}
+                  badge={it.path === "/today" && me.data && left > 0 && !me.data.passUsed ? <span className="nav-badge">{left}</span> : undefined}
                 />
               ))}
             </div>
@@ -143,6 +148,8 @@ function Shell({ path }: { path: string }) {
 }
 
 const BurgerCtx = createContext<() => void>(() => undefined);
+/** Открыть боковое меню (для страниц без стандартной шапки) */
+export const useOpenMenu = () => useContext(BurgerCtx);
 
 /** Шапка страницы + контент */
 export function Page({ title, sub, actions, children }: { title: ReactNode; sub?: ReactNode; actions?: ReactNode; children: ReactNode }) {
