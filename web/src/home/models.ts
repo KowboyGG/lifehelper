@@ -192,12 +192,8 @@ export function furnishNeon(interior: Interior, kit: THREE.Object3D) {
   });
   interior.scene.add(neon);
   hideTag(interior, "art");
-  const light = new THREE.PointLight(pink, 0.8, 3.5, 2);
+  const light = new THREE.PointLight(pink, 1.4, 3.8, 2);
   light.position.set(5.55, 1.6, conMid);
   interior.scene.add(light);
-  const wash = new THREE.RectAreaLight(pink, 1.6, 1.0, 0.8);
-  wash.position.set(5.9, 1.6, conMid);
-  wash.lookAt(4, 1.6, conMid);
-  interior.scene.add(wash);
-  return { neon, light, wash };
+  return { neon, light };
 }

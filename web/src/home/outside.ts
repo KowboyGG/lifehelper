@@ -41,7 +41,8 @@ vec3 applyFog(vec3 col, vec3 wp) {
   vec3 dir = d / max(dist, 1e-3);
   float dens = uFogDensity * (1.0 + 0.6 * uRain);
   // пятнистая дымка, медленно плывёт по ветру
-  float m = fbm3(wp * vec3(0.0045, 0.009, 0.0045) + vec3(uTime * 0.012, -uTime * 0.004, uTime * 0.007));
+  vec3 mp = wp * vec3(0.0045, 0.009, 0.0045) + vec3(uTime * 0.012, -uTime * 0.004, uTime * 0.007);
+  float m = vnoise3(mp) * 0.62 + vnoise3(mp * 2.13 + 7.1) * 0.3;
   float patchy = mix(1.0, 0.35 + 1.5 * m, uMist);
   // у нас на высоте — полоса низких облаков
   float band = exp(-pow((wp.y - 15.0) / 70.0, 2.0)) * 0.9;

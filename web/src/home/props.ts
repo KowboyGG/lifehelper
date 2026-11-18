@@ -104,13 +104,19 @@ function edgeTexture() {
 const BUNDLE = { w: 0.155, h: 0.013, d: 0.072 };
 const bundleGeo = new THREE.BoxGeometry(BUNDLE.w, BUNDLE.h, BUNDLE.d);
 
+const matCache = new Map<string, THREE.Material[]>();
 function makeBundleMaterials(cur: string, value: number) {
+  const key = `${cur}:${value}`;
+  const hit = matCache.get(key);
+  if (hit) return hit;
   const denomOf = (v: number) => (v >= 10000 ? 1000 : v >= 1000 ? (cur === "UAH" ? 1000 : 100) : v >= 100 ? 100 : 10);
   const denom = denomOf(value);
   const face = new THREE.MeshStandardMaterial({ map: noteTexture(cur, String(denom), `${fmtNum(value)} ${SYM[cur] ?? cur}`), roughness: 0.8 });
   const edge = new THREE.MeshStandardMaterial({ map: edgeTexture(), roughness: 0.95 });
   // +x, -x, +y, -y, +z, -z
-  return [edge, edge, face, face, edge, edge];
+  const mats = [edge, edge, face, face, edge, edge];
+  matCache.set(key, mats);
+  return mats;
 }
 
 /** Стопки пачек в точках slots; count пачек раскладывается по стопкам */

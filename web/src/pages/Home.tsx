@@ -6,7 +6,7 @@ import { useOpenMenu } from "../App";
 import { fmtMin, money, navigate, plural, useApi, type Goal, type Today } from "../lib";
 import { Icon } from "../ui/icons";
 import { fmtNum, splitMoney, SYM, type HomeCalendar, type HomeData, type HomeMoney, type HomeSticker, type HomeWish } from "../home/data";
-import type { HomeEngine, LedPalette } from "../home/engine";
+import type { HomeEngine, LedPalette, Quality } from "../home/engine";
 import type { Interactive } from "../home/interior";
 
 const ZONE_LABELS = ["Кухня", "Гостиная", "Окно", "Рабочее место", "Сейф"];
@@ -59,6 +59,10 @@ function dailyRain(date: string) {
 
 const isMobile = () => window.matchMedia("(max-width: 760px), (pointer: coarse)").matches;
 
+type QualityPref = Quality | "auto";
+const Q_ORDER: QualityPref[] = ["auto", "high", "medium", "low"];
+const Q_NAME: Record<Quality, string> = { high: "высокая", medium: "средняя", low: "низкая" };
+
 export function HomePage() {
   const openMenu = useOpenMenu();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -73,6 +77,8 @@ export function HomePage() {
   const [led, setLed] = useState<LedPalette>(() => (store.get("lh-led") as LedPalette) || "neon");
   const [hint, setHint] = useState(() => !store.get("lh-home-hint"));
   const [now, setNow] = useState(() => new Date());
+  const [qPref, setQPref] = useState<QualityPref>(() => (store.get("lh-quality") as QualityPref) || "auto");
+  const [qLevel, setQLevel] = useState<Quality>(() => (store.get("lh-quality-auto") as Quality) || (isMobile() ? "low" : "medium"));
 
   const today = useApi<Today>("/today");
   const stickers = useApi<HomeSticker[]>("/stickers");
@@ -98,9 +104,18 @@ export function HomePage() {
     import("../home/engine")
       .then(({ HomeEngine }) => {
         if (disposed || !canvasRef.current) return;
+        const pref = (store.get("lh-quality") as QualityPref) || "auto";
+        // в «авто» стартуем с уровня, который подобрали в прошлый раз на этом устройстве
+        const start = pref === "auto" ? ((store.get("lh-quality-auto") as Quality) || (isMobile() ? "low" : "medium")) : pref;
         eng = new HomeEngine(canvasRef.current, {
-          quality: isMobile() ? "low" : "high",
+          quality: start,
+          auto: pref === "auto",
+          mobile: isMobile(),
           events: {
+            onQuality: (q, auto) => {
+              setQLevel(q);
+              if (auto) store.set("lh-quality-auto", q);
+            },
             onHover: (k) => {
               hoverKey.current = k && k !== "window" ? k : null;
               if (!hoverKey.current) setHover(null);
@@ -180,6 +195,13 @@ export function HomePage() {
     }
   }, [hint]);
 
+  const cycleQuality = () => {
+    const next = Q_ORDER[(Q_ORDER.indexOf(qPref) + 1) % Q_ORDER.length];
+    setQPref(next);
+    store.set("lh-quality", next);
+    engRef.current?.setQuality(next);
+  };
+
   const toggleRain = () => {
     const v = !rain;
     setRain(v);
@@ -236,6 +258,14 @@ export function HomePage() {
           <div className="home-date">{date}</div>
         </div>
         <div className="spacer" />
+        <button
+          className="home-chip home-q"
+          onClick={cycleQuality}
+          title="Графика: «авто» сама снижает качество, если тормозит. Нажми, чтобы выбрать вручную"
+        >
+          <Icon name="sparkle" size={17} />
+          {qPref === "auto" ? `Авто · ${Q_NAME[qLevel]}` : Q_NAME[qPref]}
+        </button>
         <button className="home-chip" onClick={toggleRain} title="Погода меняется раз в день сама; кнопка — переключить вручную">
           <Icon name={rain ? "rain" : "fog"} size={18} />
           {rain ? "Дождь" : "Туман"}

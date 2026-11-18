@@ -2550,7 +2550,14 @@ ol.steps b {
   transform: scale(0.98);
 }
 
+.home-q {
+  color: var(--ink-2);
+  font-size: 13px;
+}
 @media (max-width: 760px) {
+  .home-q {
+    order: 10;
+  }
   .home-top {
     flex-wrap: wrap;
     padding: max(12px, env(safe-area-inset-top)) 12px 0;

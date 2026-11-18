@@ -6,7 +6,7 @@ import { mockData } from "./mock";
 
 const q = new URLSearchParams(location.search);
 const canvas = document.getElementById("c") as HTMLCanvasElement;
-const eng = new HomeEngine(canvas, { quality: (q.get("q") as "high" | "low") ?? "high" });
+const eng = new HomeEngine(canvas, { quality: (q.get("q") as "high" | "medium" | "low") ?? "medium", auto: q.get("auto") === "1" });
 eng.setRain(q.get("rain") === "1", true);
 if (q.get("led")) eng.setLed(q.get("led") as LedPalette);
 if (q.get("zone")) eng.shot(ZONES[Number(q.get("zone"))], true);
