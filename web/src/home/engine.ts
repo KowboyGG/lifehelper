@@ -27,7 +27,14 @@ export const LED_PALETTES = {
 } as const;
 export type LedPalette = keyof typeof LED_PALETTES;
 
-export type Quality = "high" | "low";
+export type Quality = "high" | "medium" | "low";
+
+/** Пресеты графики. Город и отражение рисуются в пониженном разрешении — они всё равно в тумане */
+const PRESETS: Record<Quality, { dprMax: number; scale: number; msaa: number; out: number; refl: number; bloom: boolean; skip: boolean }> = {
+  high: { dprMax: 1.25, scale: 1, msaa: 2, out: 0.7, refl: 0.33, bloom: true, skip: false },
+  medium: { dprMax: 1, scale: 0.85, msaa: 0, out: 0.55, refl: 0.25, bloom: true, skip: false },
+  low: { dprMax: 1, scale: 0.7, msaa: 0, out: 0.45, refl: 0, bloom: false, skip: true },
+};
 
 const WEATHER = {
   fog: {
@@ -104,21 +111,29 @@ const FinalShader = {
   `,
 };
 
+const _dir = new THREE.Vector3();
+const _up = new THREE.Vector3();
+const _look = new THREE.Vector3();
+const _plane = new THREE.Plane();
+const _clip = new THREE.Vector4();
+const _q = new THREE.Vector4();
+const _n = new THREE.Vector3(0, 1, 0);
+
 /** Отражение камеры относительно пола y=0 c косой плоскостью отсечения */
 function mirrorCamera(src: THREE.PerspectiveCamera, dst: THREE.PerspectiveCamera) {
   dst.position.set(src.position.x, -src.position.y, src.position.z);
-  const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(src.quaternion);
+  const dir = _dir.set(0, 0, -1).applyQuaternion(src.quaternion);
   dir.y *= -1;
-  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(src.quaternion);
+  const up = _up.set(0, 1, 0).applyQuaternion(src.quaternion);
   up.y *= -1;
   dst.up.copy(up);
-  dst.lookAt(dst.position.clone().add(dir));
+  dst.lookAt(_look.copy(dst.position).add(dir));
   dst.updateMatrixWorld();
   dst.projectionMatrix.copy(src.projectionMatrix);
-  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0).applyMatrix4(dst.matrixWorldInverse);
-  const clip = new THREE.Vector4(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
+  const plane = _plane.set(_n.set(0, 1, 0), 0).applyMatrix4(dst.matrixWorldInverse);
+  const clip = _clip.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
   const pm = dst.projectionMatrix.elements;
-  const q = new THREE.Vector4((Math.sign(clip.x) + pm[8]) / pm[0], (Math.sign(clip.y) + pm[9]) / pm[5], -1, (1 + pm[10]) / pm[14]);
+  const q = _q.set((Math.sign(clip.x) + pm[8]) / pm[0], (Math.sign(clip.y) + pm[9]) / pm[5], -1, (1 + pm[10]) / pm[14]);
   clip.multiplyScalar(2 / clip.dot(q));
   pm[2] = clip.x;
   pm[6] = clip.y;
@@ -139,6 +154,7 @@ function makeRT(w: number, h: number, mips: boolean, samples = 0) {
 }
 
 export interface EngineEvents {
+  onQuality?: (q: Quality, auto: boolean) => void;
   onHover?: (key: Interactive | null) => void;
   onPick?: (key: Interactive) => void;
   onZone?: (index: number) => void;
@@ -169,6 +185,14 @@ export class HomeEngine {
   private raf = 0;
   private running = false;
   private quality: Quality;
+  private auto = true;
+  private mobile = false;
+  private frameTimes: number[] = [];
+  private settle = 40;
+  private upgraded = false;
+  private lastTs = 0;
+  private skipFlip = false;
+  private shadowDirty = 3;
   private dpr = 1;
   private size = new THREE.Vector2(1, 1);
   private rain = 0;
@@ -187,10 +211,12 @@ export class HomeEngine {
   time = 0;
   onFrame: ((dt: number, t: number) => void) | null = null;
 
-  constructor(canvas: HTMLCanvasElement, opts: { quality?: Quality; events?: EngineEvents } = {}) {
+  constructor(canvas: HTMLCanvasElement, opts: { quality?: Quality; auto?: boolean; mobile?: boolean; events?: EngineEvents } = {}) {
     this.canvas = canvas;
     this.events = opts.events ?? {};
-    this.quality = opts.quality ?? "high";
+    this.mobile = !!opts.mobile;
+    this.quality = opts.quality ?? (this.mobile ? "low" : "medium");
+    this.auto = opts.auto ?? true;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", alpha: false, stencil: false });
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
@@ -228,6 +254,7 @@ export class HomeEngine {
   async loadModels(base = "/models/") {
     const [kitchen, desk, neon, city1, city2] = await Promise.all(["kitchen", "desk", "neon", "city1", "city2"].map((n) => loadKit(n, base)));
     if (this.disposed) return;
+    this.shadowDirty = 3;
     if (kitchen) furnishKitchen(this.interior, kitchen);
     if (desk) furnishDesk(this.interior, desk);
     if (neon) furnishNeon(this.interior, neon);
@@ -241,6 +268,63 @@ export class HomeEngine {
 
   setData(d: HomeData) {
     this.props.setData(d);
+    this.shadowDirty = 2;
+  }
+
+  /** Уровень графики: вручную или «авто» (подстраивается по частоте кадров) */
+  setQuality(q: Quality | "auto") {
+    if (q === "auto") {
+      this.auto = true;
+      this.upgraded = false;
+      this.frameTimes = [];
+      this.settle = 40;
+      this.events.onQuality?.(this.quality, true);
+      return;
+    }
+    this.auto = false;
+    this.applyQuality(q);
+  }
+  get qualityLevel() {
+    return this.quality;
+  }
+  get qualityAuto() {
+    return this.auto;
+  }
+
+  private applyQuality(q: Quality) {
+    const prevMsaa = PRESETS[this.quality].msaa;
+    this.quality = q;
+    if (PRESETS[q].msaa !== prevMsaa) {
+      this.composer.dispose();
+      this.setupPost();
+    }
+    this.resize();
+    this.frameTimes = [];
+    this.settle = 40;
+    this.events.onQuality?.(q, this.auto);
+  }
+
+  /** Автоподстройка: средний кадр медленнее ~33 к/с — снижаем, очень быстрый — разок повышаем */
+  private measure(ms: number) {
+    if (!this.auto) return;
+    if (this.settle > 0) {
+      this.settle--;
+      return;
+    }
+    this.frameTimes.push(ms);
+    if (this.frameTimes.length < 90) return;
+    const sorted = [...this.frameTimes].sort((a, b) => a - b);
+    const med = sorted[Math.floor(sorted.length / 2)];
+    this.frameTimes = [];
+    const order: Quality[] = ["low", "medium", "high"];
+    const i = order.indexOf(this.quality);
+    // на «низком» кадр рисуется через раз, поэтому порог вдвое мягче
+    const slow = this.quality === "low" ? 60 : 30;
+    if (med > slow && i > 0) this.applyQuality(order[i - 1]);
+    else if (med < 13 && i < 2 && !this.upgraded && !this.mobile) {
+      this.upgraded = true;
+      this.applyQuality(order[i + 1]);
+    }
   }
   onModels: (() => void) | null = null;
   private disposed = false;
@@ -254,9 +338,17 @@ export class HomeEngine {
     if (this.running) return;
     this.running = true;
     this.clock.update();
-    const loop = () => {
+    this.lastTs = 0;
+    const loop = (ts: number) => {
       if (!this.running) return;
       this.raf = requestAnimationFrame(loop);
+      // на «низком» рисуем через кадр — вдвое меньше нагрузки
+      if (PRESETS[this.quality].skip) {
+        this.skipFlip = !this.skipFlip;
+        if (this.skipFlip) return;
+      }
+      if (this.lastTs) this.measure(ts - this.lastTs);
+      this.lastTs = ts;
       this.frame();
     };
     this.raf = requestAnimationFrame(loop);
@@ -344,8 +436,8 @@ export class HomeEngine {
     const w = Math.max(1, parent.clientWidth);
     const h = Math.max(1, parent.clientHeight);
     this.size.set(w, h);
-    const maxDpr = this.quality === "high" ? 1.5 : 1;
-    this.dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+    const P = PRESETS[this.quality];
+    this.dpr = Math.min(window.devicePixelRatio || 1, P.dprMax) * P.scale;
     this.renderer.setPixelRatio(this.dpr);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
@@ -355,10 +447,13 @@ export class HomeEngine {
     this.rtOut?.dispose();
     this.rtRefl?.dispose();
     this.rtReflOut?.dispose();
-    this.rtOut = makeRT(W, H, true);
-    const rs = this.quality === "high" ? 0.5 : 0.35;
+    this.rtOut = makeRT(Math.floor(W * P.out), Math.floor(H * P.out), true);
+    const rs = Math.max(P.refl, 0.1);
     this.rtRefl = makeRT(Math.floor(W * rs), Math.floor(H * rs), true);
-    this.rtReflOut = makeRT(Math.floor(W * rs), Math.floor(H * rs), false);
+    this.rtReflOut = makeRT(Math.floor(W * rs * 0.8), Math.floor(H * rs * 0.8), false);
+    this.refl.strength.value = P.refl > 0 ? 0.55 : 0;
+    this.bloom.enabled = P.bloom;
+    this.shadowDirty = 2;
     this.composer.setPixelRatio(this.dpr);
     this.composer.setSize(w, h);
     this.final.uniforms.uRes.value.set(W, H);
@@ -388,6 +483,8 @@ export class HomeEngine {
     kill(this.outside.scene);
     this.pmrem.dispose();
     this.renderer.dispose();
+    // сразу отдать видеопамять, не дожидаясь сборщика мусора
+    this.renderer.forceContextLoss();
   }
 
   // ------------------------------------------------------------------ внутреннее
@@ -403,7 +500,7 @@ export class HomeEngine {
         engine.renderScene(readBuffer);
       }
     }
-    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: this.quality === "high" ? 4 : 0 });
+    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: PRESETS[this.quality].msaa });
     this.composer = new EffectComposer(this.renderer, rt);
     this.composer.addPass(new ScenePass());
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.62, 0.7, 0.92);
@@ -424,8 +521,11 @@ export class HomeEngine {
     this.outCam.updateMatrixWorld();
 
     const floor = this.interior.floor;
-    // карта теней одна на кадр — считаем до первого прохода с комнатой
-    r.shadowMap.needsUpdate = true;
+    // тень от лампы на столике меняется, только когда меняются деньги — не пересчитываем каждый кадр
+    if (this.shadowDirty > 0) {
+      r.shadowMap.needsUpdate = true;
+      this.shadowDirty--;
+    }
     // 1) отражение
     if (this.refl.strength.value > 0) {
       mirrorCamera(cam, this.vCam);
@@ -435,7 +535,7 @@ export class HomeEngine {
         .multiply(this.vCam.projectionMatrix)
         .multiply(this.vCam.matrixWorldInverse);
       this.G.tOut.value = this.rtReflOut.texture;
-      this.G.uRes.value.set(this.rtReflOut.width, this.rtReflOut.height);
+      this.G.uRes.value.set(this.rtRefl.width, this.rtRefl.height);
       this.G.uLod.value = 0.5;
       this.outside.setPixelScale(this.rtReflOut.height / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2))));
       r.setRenderTarget(this.rtReflOut);
@@ -449,7 +549,7 @@ export class HomeEngine {
     }
     // 2) город
     this.G.tOut.value = this.rtOut.texture;
-    this.G.uRes.value.set(this.rtOut.width, this.rtOut.height);
+    this.G.uRes.value.set(target.width, target.height);
     this.G.uLod.value = 0;
     this.outside.setPixelScale(this.rtOut.height / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2))));
     r.setRenderTarget(this.rtOut);

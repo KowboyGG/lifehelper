@@ -253,9 +253,6 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   }
   // подсветка под верхними шкафами
   box(0.012, 0.01, kLen - 0.1, ledMat(false), x0 + 0.33, 1.49, kMid);
-  const underCab = rectLight("#ffffff", 1, kLen - 0.1, 0.04, new THREE.Vector3(x0 + 0.3, 1.485, kMid), new THREE.Vector3(0.15, -1, 0), new THREE.Vector3(0, 0, 1));
-  add(underCab);
-  secondaryLights.push(underCab);
   // мойка и смеситель
   tag(box(0.42, 0.005, 0.6, std({ color: "#060607", roughness: 0.3, metalness: 0.4 }), x0 + 0.34, 0.912, -0.9), "sink");
   const faucet = new THREE.Mesh(
@@ -348,6 +345,7 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   flame.position.set(iMid + 0.15, 1.0, -0.45);
   add(flame);
   const candle = new THREE.PointLight("#ff9a4a", 0.06, 2.5, 2);
+  candle.visible = false; // свеча светит только сама — лишний источник дорог
   candle.position.set(iMid + 0.15, 1.12, -0.45);
   add(candle);
   // бутылка и бокалы
@@ -379,6 +377,7 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   diffuser.position.set(iMid, 2.1, 0);
   add(diffuser);
   const pendant = new THREE.PointLight("#ff9a55", 0.12, 3.5, 2);
+  pendant.visible = false;
   pendant.position.set(iMid, 2.15, 0);
   add(pendant);
 
@@ -593,7 +592,9 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   tag(box(0.2, 0.012, 0.28, steel, dx + 0.18, 0.755, dz, monitor), "deskset");
   // подсветка за монитором — светит в стекло
   box(0.01, 0.01, 0.8, ledMat(false), dx + 0.2, 1.2, dz, monitor);
-  const screenLight = rectLight("#cfe0ff", 1.2, 0.85, 0.36, new THREE.Vector3(dx + 0.15, 1.2, dz), new THREE.Vector3(-1, -0.2, 0), new THREE.Vector3(0, 0, 1));
+  // свет экрана — дешёвая точка вместо прямоугольного источника
+  const screenLight = new THREE.PointLight("#cfe0ff", 0.35, 2.2, 2);
+  screenLight.position.set(dx - 0.1, 1.15, dz);
   add(screenLight);
   interactive.set("monitor", monitor);
   // клавиатура, мышь, кружка, суккулент
@@ -607,9 +608,6 @@ export function buildInterior(G: GlassUniforms, refl: ReflectionHooks) {
   add(tag(succ, "deskset"), desk);
   // подсветка под столом
   box(0.012, 0.01, 1.6, ledMat(false), dx - 0.3, 0.715, dz);
-  const deskGlow = rectLight("#ffffff", 1, 0.5, 1.6, new THREE.Vector3(dx, 0.71, dz), new THREE.Vector3(-0.1, -1, 0), new THREE.Vector3(1, 0, 0));
-  add(deskGlow);
-  secondaryLights.push(deskGlow);
   // кресло
   const chair = new THREE.Group();
   chair.position.set(dx - 0.8, 0, dz + 0.05);
