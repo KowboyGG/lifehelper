@@ -140,7 +140,7 @@ void main() {
   float mask = clamp(s1.z + s2.z + l1.z + l2.z, 0.0, 1.0);
 
   // запотевшее стекло: в дождь всё за окном чуть расплывается, в каплях — резко
-  float haze = rain * 2.4 * (1.0 - wipe * 0.75) * (1.0 - mask) + 0.35 * (1.0 - mask) * (1.0 - rain) * 0.0;
+  float haze = rain * 1.45 * (1.0 - wipe * 0.75) * (1.0 - mask);
   float lod = haze + uLod;
   vec2 off = -n * mix(0.018, 0.03, rain) * (uRes.y / uRes.x * 1.6);
   vec3 col = sampleOut(suv + off, lod * (1.0 - mask * 0.85));

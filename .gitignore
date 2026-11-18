@@ -8,3 +8,9 @@ extension.zip
 
 # исходники моделей для отладки (симлинк)
 web/public/__src
+web/public/__out
+
+# сырые модели со Sketchfab (обработанные лежат в web/public/models)
+/*.rar
+/*.glb
+models-src/

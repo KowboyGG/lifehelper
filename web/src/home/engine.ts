@@ -323,8 +323,11 @@ export class HomeEngine {
     return this.zone;
   }
 
-  focus(key: Interactive) {
+  /** Подлететь к предмету. Карточка справа (компьютер) или снизу (телефон) — сдвигаем кадр, чтобы предмет не прятался под ней */
+  focus(key: Interactive, panel: "right" | "bottom" | null = null) {
     this.rig.setShot(FOCUS[key]);
+    if (panel === "right") this.rig.tYaw -= 0.2;
+    if (panel === "bottom") this.rig.tPitch -= 0.2;
   }
   shot(s: Shot, instant = false) {
     this.rig.setShot(s, instant);
